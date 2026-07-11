@@ -2,7 +2,8 @@ name: LoadSurge CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, 'v*' ]
+    branches: [ main, develop ]
+    tags: [ 'v*' ]  # release tags trigger the publish job
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
@@ -98,8 +99,8 @@ jobs:
 
     - name: Update .csproj with Version
       run: |
+        # Only the version is stamped; PackageReleaseNotes stays canonical from the csproj
         sed -i 's|<Version>.*</Version>|<Version>${{ env.VERSION }}</Version>|' src/LoadSurge/LoadSurge.csproj
-        sed -i 's|<PackageReleaseNotes>.*</PackageReleaseNotes>|<PackageReleaseNotes>Version ${{ env.VERSION }} - Automated build from commit ${{ github.sha }}</PackageReleaseNotes>|' src/LoadSurge/LoadSurge.csproj
         echo "Updated version in .csproj to: ${{ env.VERSION }}"
 
     - name: Restore dependencies
@@ -117,8 +118,9 @@ jobs:
         name: nuget-packages
         path: ./artifacts/*.nupkg
 
-    - name: Publish to NuGet (on tag or main branch)
-      if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+    - name: Publish to NuGet (release tags only)
+      # Deliberate releases only: main pushes build an inspectable artifact but do not publish
+      if: startsWith(github.ref, 'refs/tags/v')
       run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   security-scan:

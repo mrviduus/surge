@@ -171,9 +171,10 @@ All tests in `tests/LoadSurge.Tests/Unit/`:
 - **Security Job:** Scans for vulnerabilities
 
 ### NuGet Publishing
-- Automatic on main branch commits — CI reads the base version from the csproj and publishes `{base}.{GITHUB_RUN_NUMBER}` (e.g. `3.0.0.42`).
-- Automatic on version tags (e.g., `v3.0.1` uses exact tag version)
+- **Release tags only** (`v*`, e.g. `v3.1.0` publishes exactly `3.1.0`) — deliberate releases, no per-commit publishing
+- Main pushes build and upload the .nupkg as a workflow artifact (version `{csproj-base}.{GITHUB_RUN_NUMBER}`) but do NOT publish
 - Requires `NUGET_API_KEY` secret in repository
+- Release flow: bump csproj `<Version>` + CHANGELOG → merge to main → `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 ## Common Scenarios
 

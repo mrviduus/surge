@@ -22,7 +22,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>Version 3.0.0: Removed Akka.NET - zero external dependencies. New open-workload-model engine (constant arrival rate): task-per-arrival, lock-striped metrics, allocation-free hot path. New: LoadSettings.RequestTimeout, LoadWorkerConfiguration.MaxInFlight (k6-style dropped iterations), LoadResult.Dropped. Obsolete (ignored): Mode, MaxWorkerThreads, ChannelCapacity. Fixed: graceful-stop race, failure latency skewing percentiles.</PackageReleaseNotes>
+    <PackageReleaseNotes>Version 3.1.0: Removed Akka.NET - zero external dependencies. Open-workload-model engine (constant arrival rate): task-per-arrival, lock-striped metrics, allocation-free hot path. New: CancellationToken support (returns partial results), ActionWithCancellation, RequestTimeout, MaxInFlight + LoadResult.Dropped, live progress via IProgress&lt;LoadProgress&gt;, input validation. Multi-targets netstandard2.0 and net8.0 (AOT-compatible, trimmable). Obsolete (ignored): Mode, MaxWorkerThreads, ChannelCapacity. See CHANGELOG for details.</PackageReleaseNotes>
 
     <!-- Build Settings -->
     <IsPackable>true</IsPackable>
