@@ -158,9 +158,15 @@ result.Percentile95Latency // P95 latency (ms)
 result.Percentile99Latency // P99 latency (ms)
 ```
 
+## Samples
+
+Runnable offline examples: `dotnet run --project samples/LoadSurge.Samples`
+
 ## Requirements
 
 - .NET Standard 2.0+ (.NET Framework 4.7.2+, .NET 6/8/9+)
+- The `net8.0` build is Native-AOT-compatible and trimmable
+- Zero external dependencies
 
 ## Related
 

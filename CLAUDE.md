@@ -7,10 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 LoadSurge is a high-performance, dependency-free load testing framework for .NET. It implements an **open workload model** (constant arrival rate, NBomber `Inject` / k6 `constant-arrival-rate` style) and can be integrated with any testing framework or used standalone.
 
 **Key Technologies:**
-- Library targets `netstandard2.0` for broad reach: .NET Framework 4.7.2+, .NET 6/8/9+. Built with the .NET 8 SDK (`global.json` pins `8.0.100`, `rollForward: latestFeature`).
+- Library multi-targets `netstandard2.0;net8.0`: netstandard2.0 for reach (.NET Framework 4.7.2+, .NET 6+), net8.0 for Native-AOT/trimming support (`IsAotCompatible`, `IsTrimmable`). Built with the .NET 8 SDK (`global.json` pins `8.0.100`, `rollForward: latestFeature`).
 - **Zero external dependencies** (Akka.NET was removed in v3.0.0)
 - xUnit v3 (Testing; test project targets `net8.0`)
-- NuGet package published as `LoadSurge` (current version 3.0.0)
+- NuGet package published as `LoadSurge` (current version 3.1.0)
+- CA1510 (`ThrowIfNull`) is disabled in `.editorconfig`: not available on netstandard2.0, single code path kept for both TFMs
 
 **Note:** `ImplicitUsings` is **disabled** — every file declares explicit `using` directives and uses full `namespace X { }` block style. Match this when adding files.
 
@@ -198,6 +199,7 @@ LoadSurge/
 │   └── PublicAPI.*.txt      # Declared public API surface (analyzer-enforced)
 ├── tests/LoadSurge.Tests/Unit/
 ├── benchmarks/LoadSurge.Benchmarks/  # BenchmarkDotNet (zero-alloc proof)
+├── samples/LoadSurge.Samples/        # Runnable offline examples
 ├── .github/workflows/       # CI/CD
 ├── .editorconfig            # Style conventions
 ├── Directory.Packages.props # Central package management

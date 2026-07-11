@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Live progress reporting: `LoadWorkerConfiguration.Progress` (`IProgress<LoadProgress>`) + `ProgressInterval` (default 1s). Snapshots carry elapsed, started/completed/success/failure, in-flight, dropped, and running RPS; a closing snapshot is always delivered before `Run` returns. A throwing progress consumer cannot break the run.
+- Multi-targeting `netstandard2.0;net8.0`; the net8.0 build is Native-AOT-compatible and trimmable (`IsAotCompatible`, `IsTrimmable`)
+- `samples/LoadSurge.Samples` - runnable offline examples (basic run + full feature tour with live progress)
+- SECURITY.md, CONTRIBUTING.md
 
 ## [3.0.0] - 2026-07-11
 
