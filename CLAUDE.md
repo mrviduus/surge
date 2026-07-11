@@ -104,6 +104,7 @@ The run spans the full `Duration` window (Time/RPS are schedule-normalized), exc
 
 **LoadWorkerConfiguration:**
 - `MaxInFlight` (nullable, default null = unlimited) - Safety cap protecting the test process from OOM when the SUT hangs; excess iterations are dropped and counted in `LoadResult.Dropped`
+- `Progress` (`IProgress<LoadProgress>?`) + `ProgressInterval` (default 1s) - live snapshots during the run plus a closing snapshot before `Run` returns; a throwing consumer never breaks the run (reporting loop in `LoadEngine.ReportProgressAsync`)
 - `Mode`, `MaxWorkerThreads`, `ChannelCapacity` - **obsolete since v3.0.0, ignored**. Do not use in new code
 
 ### LoadResult Metrics
@@ -150,6 +151,7 @@ All tests in `tests/LoadSurge.Tests/Unit/`:
 - `MetricsCollectorTests.cs` - Percentiles, failure-latency exclusion, concurrent-recording exactness
 - `ValidationTests.cs` - Fail-fast input validation
 - `CancellationTests.cs` - Run cancellation, token propagation, timeout-cancels-work
+- `ProgressReportingTests.cs` - Live progress cadence, monotonic counters, misbehaving consumers
 - `RequestCountAccuracyTests.cs` - Request counting per termination mode
 - `GracefulStopConfigurationTests.cs` - Shutdown behavior
 - `LoadRunnerTimeoutTests.cs` - End-to-end completion without hangs

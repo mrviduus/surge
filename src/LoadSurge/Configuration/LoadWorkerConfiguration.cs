@@ -1,4 +1,5 @@
 using System;
+using LoadSurge.Models;
 
 namespace LoadSurge.Configuration
 {
@@ -37,6 +38,21 @@ namespace LoadSurge.Configuration
         /// memory exhaustion when the system under test hangs or responds very slowly.
         /// </summary>
         public int? MaxInFlight { get; set; }
+
+        /// <summary>
+        /// Optional live-progress sink. When set, the engine reports a
+        /// <see cref="LoadProgress"/> snapshot every <see cref="ProgressInterval"/>
+        /// while the run is active, plus one final snapshot before returning.
+        /// Reports are delivered via IProgress semantics (posted to the captured
+        /// SynchronizationContext when one exists).
+        /// </summary>
+        public IProgress<LoadProgress>? Progress { get; set; }
+
+        /// <summary>
+        /// Cadence of <see cref="Progress"/> reports. Default: 1 second.
+        /// Ignored when <see cref="Progress"/> is null.
+        /// </summary>
+        public TimeSpan ProgressInterval { get; set; } = TimeSpan.FromSeconds(1);
 
         /// <summary>
         /// Enable detailed performance metrics collection and logging.

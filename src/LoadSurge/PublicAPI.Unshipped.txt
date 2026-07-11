@@ -1,1 +1,23 @@
 #nullable enable
+LoadSurge.Configuration.LoadWorkerConfiguration.Progress.get -> System.IProgress<LoadSurge.Models.LoadProgress!>?
+LoadSurge.Configuration.LoadWorkerConfiguration.Progress.set -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.ProgressInterval.get -> System.TimeSpan
+LoadSurge.Configuration.LoadWorkerConfiguration.ProgressInterval.set -> void
+LoadSurge.Models.LoadProgress
+LoadSurge.Models.LoadProgress.Completed.get -> int
+LoadSurge.Models.LoadProgress.Completed.set -> void
+LoadSurge.Models.LoadProgress.Dropped.get -> int
+LoadSurge.Models.LoadProgress.Dropped.set -> void
+LoadSurge.Models.LoadProgress.ElapsedSeconds.get -> double
+LoadSurge.Models.LoadProgress.ElapsedSeconds.set -> void
+LoadSurge.Models.LoadProgress.Failure.get -> int
+LoadSurge.Models.LoadProgress.Failure.set -> void
+LoadSurge.Models.LoadProgress.InFlight.get -> int
+LoadSurge.Models.LoadProgress.InFlight.set -> void
+LoadSurge.Models.LoadProgress.LoadProgress() -> void
+LoadSurge.Models.LoadProgress.RequestsPerSecond.get -> double
+LoadSurge.Models.LoadProgress.RequestsPerSecond.set -> void
+LoadSurge.Models.LoadProgress.RequestsStarted.get -> int
+LoadSurge.Models.LoadProgress.RequestsStarted.set -> void
+LoadSurge.Models.LoadProgress.Success.get -> int
+LoadSurge.Models.LoadProgress.Success.set -> void

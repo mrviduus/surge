@@ -113,6 +113,40 @@ namespace LoadSurge.Engine
         /// <summary>Total requests started so far. Used by the engine for MaxIterations accounting.</summary>
         public int Started => Volatile.Read(ref _started);
 
+        /// <summary>
+        /// Cheap point-in-time snapshot for live progress reporting.
+        /// Takes each stripe lock briefly; intended for ~1 Hz cadence, not the hot path.
+        /// </summary>
+        public LoadProgress Snapshot()
+        {
+            int success = 0, failure = 0;
+            foreach (var stripe in _stripes)
+            {
+                lock (stripe.Lock)
+                {
+                    success += stripe.Success;
+                    failure += stripe.Failure;
+                }
+            }
+
+            var elapsedSeconds = _startTimestamp == 0
+                ? 0
+                : (Stopwatch.GetTimestamp() - _startTimestamp) / (double)Stopwatch.Frequency;
+            var completed = success + failure;
+
+            return new LoadProgress
+            {
+                ElapsedSeconds = elapsedSeconds,
+                RequestsStarted = Volatile.Read(ref _started),
+                Completed = completed,
+                Success = success,
+                Failure = failure,
+                InFlight = Volatile.Read(ref _inFlight),
+                Dropped = Volatile.Read(ref _dropped),
+                RequestsPerSecond = elapsedSeconds > 0 ? completed / elapsedSeconds : 0
+            };
+        }
+
         /// <summary>Aggregates all recorded data into the final result. Call once, after the run completes.</summary>
         public LoadResult BuildResult(int workerThreadsUsed = 0)
         {

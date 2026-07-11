@@ -34,6 +34,15 @@ namespace LoadSurge.Engine
             var collector = new MetricsCollector(plan.Name);
             collector.MarkStarted();
 
+            // Live progress: an independent low-frequency loop; stopped (with a final
+            // report) just before the result is built so consumers see the closing state.
+            using var progressCts = configuration.Progress != null
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : null;
+            var progressTask = configuration.Progress != null
+                ? ReportProgressAsync(configuration.Progress, configuration.ProgressInterval, collector, progressCts!.Token)
+                : Task.CompletedTask;
+
             var runStart = Stopwatch.GetTimestamp();
             var executed = 0;   // iterations actually spawned (dropped ones do not consume MaxIterations budget)
             var batchNumber = 0;
@@ -122,7 +131,41 @@ namespace LoadSurge.Engine
                 }
             }
 
+            if (progressCts != null)
+            {
+                progressCts.Cancel();
+                await progressTask.ConfigureAwait(false);
+                try
+                {
+                    configuration.Progress!.Report(collector.Snapshot()); // closing snapshot
+                }
+                catch
+                {
+                    // A throwing progress consumer must not take down the run.
+                }
+            }
+
             return collector.BuildResult();
+        }
+
+        /// <summary>Reports collector snapshots at a fixed cadence until cancelled. Never throws.</summary>
+        private static async Task ReportProgressAsync(
+            IProgress<LoadProgress> progress,
+            TimeSpan interval,
+            MetricsCollector collector,
+            CancellationToken cancellationToken)
+        {
+            while (await DelayAsync(interval.TotalMilliseconds, cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    progress.Report(collector.Snapshot());
+                }
+                catch
+                {
+                    // A throwing progress consumer must not take down the run.
+                }
+            }
         }
 
         /// <summary>Delays without throwing; returns false when cancelled so callers can break out.</summary>

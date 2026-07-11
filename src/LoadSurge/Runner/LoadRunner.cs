@@ -108,6 +108,10 @@ namespace LoadSurge.Runner
 			if (configuration?.MaxInFlight is int maxInFlight && maxInFlight <= 0)
 				throw new ArgumentOutOfRangeException(nameof(configuration), maxInFlight,
 					"LoadWorkerConfiguration.MaxInFlight must be at least 1 when set.");
+
+			if (configuration?.Progress != null && configuration.ProgressInterval <= TimeSpan.Zero)
+				throw new ArgumentOutOfRangeException(nameof(configuration), configuration.ProgressInterval,
+					"LoadWorkerConfiguration.ProgressInterval must be positive when Progress is set.");
 		}
 	}
 }

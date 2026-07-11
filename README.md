@@ -132,6 +132,18 @@ var plan = new LoadExecutionPlan
 var result = await LoadRunner.Run(plan, config, cancellationToken);
 ```
 
+Live progress (long runs are not a black box):
+
+```csharp
+var config = new LoadWorkerConfiguration
+{
+    Progress = new Progress<LoadProgress>(p =>
+        Console.WriteLine($"[{p.ElapsedSeconds:F0}s] started={p.RequestsStarted} ok={p.Success} " +
+                          $"fail={p.Failure} inflight={p.InFlight} dropped={p.Dropped} rps={p.RequestsPerSecond:F0}")),
+    ProgressInterval = TimeSpan.FromSeconds(1) // default
+};
+```
+
 ## Results
 
 ```csharp

@@ -111,7 +111,8 @@ namespace LoadSurge.Tests.Unit
         {
             var config = new LoadWorkerConfiguration { MaxInFlight = 0 };
 
-            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => LoadRunner.Run(ValidPlan(), config));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => LoadRunner.Run(ValidPlan(), config, TestContext.Current.CancellationToken));
         }
 
         [Fact]
@@ -121,7 +122,7 @@ namespace LoadSurge.Tests.Unit
             plan.Action = null;
             plan.ActionWithCancellation = _ => Task.FromResult(true);
 
-            var result = await LoadRunner.Run(plan);
+            var result = await LoadRunner.Run(plan, null, TestContext.Current.CancellationToken);
 
             Assert.True(result.Total > 0);
             Assert.Equal(result.Total, result.Success);

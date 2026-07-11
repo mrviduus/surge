@@ -204,7 +204,7 @@ namespace LoadSurge.Tests.Unit
             var configuration = new LoadWorkerConfiguration();
 
             // Act & Assert
-            var result = await LoadRunner.Run(executionPlan, configuration);
+            var result = await LoadRunner.Run(executionPlan, configuration, TestContext.Current.CancellationToken);
 
             Assert.NotNull(result);
             Assert.True(result.Total > 0);

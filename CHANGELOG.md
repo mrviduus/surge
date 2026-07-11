@@ -5,6 +5,11 @@ All notable changes to the LoadSurge project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-07-11
+
+### Added
+- Live progress reporting: `LoadWorkerConfiguration.Progress` (`IProgress<LoadProgress>`) + `ProgressInterval` (default 1s). Snapshots carry elapsed, started/completed/success/failure, in-flight, dropped, and running RPS; a closing snapshot is always delivered before `Run` returns. A throwing progress consumer cannot break the run.
+
 ## [3.0.0] - 2026-07-11
 
 ### Changed
