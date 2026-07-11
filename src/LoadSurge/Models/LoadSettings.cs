@@ -63,6 +63,15 @@ namespace LoadSurge.Models
         public int? MaxIterations { get; set; }
         
         /// <summary>
+        /// Gets or sets the maximum time a single request is allowed to run before being
+        /// counted as a failure. The underlying operation is not forcibly aborted (the action
+        /// receives no cancellation token), but the result is recorded as a timeout failure
+        /// and the request no longer counts toward in-flight tracking.
+        /// Null (default) means no per-request timeout.
+        /// </summary>
+        public TimeSpan? RequestTimeout { get; set; }
+
+        /// <summary>
         /// Gets the effective graceful stop timeout, applying defaults if not specified.
         /// Implements industry standard calculations when null.
         /// Uses 30% of test duration, bounded between 5 seconds and 60 seconds.

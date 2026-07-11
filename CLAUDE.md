@@ -4,26 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LoadSurge is a high-performance, actor-based load testing framework for .NET built on Akka.NET. It provides framework-agnostic load testing capabilities that can be integrated with any testing framework or used standalone.
+LoadSurge is a high-performance, dependency-free load testing framework for .NET. It implements an **open workload model** (constant arrival rate, NBomber `Inject` / k6 `constant-arrival-rate` style) and can be integrated with any testing framework or used standalone.
 
 **Key Technologies:**
-- .NET 8.0
-- Akka.NET 1.5.54 (Actor model)
-- xUnit v3 (Testing)
-- NuGet package published as `LoadSurge`
+- Library targets `netstandard2.0` for broad reach: .NET Framework 4.7.2+, .NET 6/8/9+. Built with the .NET 8 SDK (`global.json` pins `8.0.100`, `rollForward: latestFeature`).
+- **Zero external dependencies** (Akka.NET was removed in v3.0.0)
+- xUnit v3 (Testing; test project targets `net8.0`)
+- NuGet package published as `LoadSurge` (current version 3.0.0)
+
+**Note:** `ImplicitUsings` is **disabled** — every file declares explicit `using` directives and uses full `namespace X { }` block style. Match this when adding files.
 
 ## Build & Development Commands
 
 ### Build
 ```bash
-# Restore dependencies
 dotnet restore
-
-# Build solution
 dotnet build
-
-# Build in Release mode
-dotnet build --configuration Release
+dotnet build --configuration Release   # TreatWarningsAsErrors here
 ```
 
 ### Testing
@@ -31,160 +28,101 @@ dotnet build --configuration Release
 # Run all tests
 dotnet test
 
-# Run tests with detailed output
-dotnet test --verbosity detailed
-
-# Run tests with code coverage
-dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults
-
-# Run a specific test by class name
-dotnet test --filter "FullyQualifiedName~HybridModeTests"
-
-# Run a specific test method
-dotnet test --filter "FullyQualifiedName~HybridModeTests.ShouldHandleHighConcurrency"
+# Run a specific test class / method
+dotnet test --filter "FullyQualifiedName~LoadEngineTests"
+dotnet test --filter "FullyQualifiedName~LoadEngineTests.MaxIterations_Executes_Exactly_N_Times"
 
 # Run tests excluding CI-flaky tests
 dotnet test --filter "Category!=CI-Flaky"
+
+# Code coverage
+dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults
 ```
 
 ### Package
 ```bash
-# Create NuGet package
 dotnet pack src/LoadSurge/LoadSurge.csproj --configuration Release
-
-# Pack with specific version
-dotnet pack src/LoadSurge/LoadSurge.csproj -p:Version=1.0.1
-
-# Pack with symbols for debugging
-dotnet pack src/LoadSurge/LoadSurge.csproj --configuration Release --include-symbols --include-source
+dotnet pack src/LoadSurge/LoadSurge.csproj -p:Version=3.0.1
 ```
+
+### Benchmarks
+```bash
+# Full run (slow); proves the zero-alloc hot path via MemoryDiagnoser
+dotnet run -c Release --project benchmarks/LoadSurge.Benchmarks
+
+# Quick check of a single suite
+dotnet run -c Release --project benchmarks/LoadSurge.Benchmarks -- --filter "*MetricsCollector*" --job short
+```
+Baseline (Apple Silicon, short job): `RequestStarted + RecordResult` ≈ 8-16 ns, **0 B allocated**. A PR that introduces allocations in the hot path must be rejected or justified.
 
 ## Architecture Overview
 
-### Actor-Based Design
+### Open Workload Model (v3.0.0+)
 
-LoadSurge uses the actor model for distributed, fault-tolerant load testing:
+The scheduler injects `Concurrency` iterations every `Interval` at absolute-time slots, **regardless of whether previous responses have returned**. Under a slow system, in-flight requests accumulate (Little's Law: in-flight ≈ rate × latency) — this is deliberate and is what an open model must measure. There is no worker pool: a pool would silently throttle injection and convert the open model into a closed one.
 
 ```
-LoadRunner (Entry Point)
+LoadRunner.Run(plan)                     (Runner/LoadRunner.cs - thin entry point)
     ↓
-    Creates ActorSystem
+LoadEngine.RunAsync                      (Engine/LoadEngine.cs)
+    │  scheduler loop: batch every Interval at absolute-time slots (no drift)
+    │  per iteration: task-per-arrival on the thread pool
+    │  optional MaxInFlight cap → drop + count (k6-style dropped iterations)
+    │  after Duration: graceful drain up to EffectiveGracefulStopTimeout
     ↓
-    ┌─────────────────────────────────────┐
-    │  ResultCollectorActor               │  ← Aggregates metrics
-    │  - Tracks requests                  │
-    │  - Calculates latency percentiles   │
-    │  - Reports final LoadResult         │
-    └─────────────────────────────────────┘
+MetricsCollector                         (Engine/MetricsCollector.cs)
+    │  lock-striped accumulators (one stripe per core) - near-zero contention
+    │  Interlocked in-flight counter; latencies merged + sorted once at the end
     ↓
-    ┌─────────────────────────────────────┐
-    │  LoadWorkerActor / Hybrid           │  ← Executes load test
-    │  - Schedules batches at intervals   │
-    │  - Executes user's Action           │
-    │  - Reports results via messages     │
-    └─────────────────────────────────────┘
+LoadResult
 ```
 
-**Key Components:**
+**Hot-path rules (keep it allocation-free):**
+- `Stopwatch.GetTimestamp()` for all timing — never `DateTime.UtcNow`, never `Stopwatch.StartNew()` per request
+- No per-request object allocations; results go into lock-striped accumulators
+- Failed requests are counted but their latency is **excluded** from latency statistics (would skew MinLatency/percentiles)
 
-1. **LoadRunner** (`src/LoadSurge/Runner/LoadRunner.cs`)
-   - Static entry point for executing load tests
-   - Orchestrates actor system lifecycle
-   - Uses Akka Ask pattern with adaptive timeouts
-
-2. **LoadWorkerActorHybrid** (`src/LoadSurge/Actors/LoadWorkerActorHybrid.cs`) - **DEFAULT**
-   - Channel-based producer-consumer pattern
-   - Fixed thread pool prevents thread pool exhaustion
-   - Optimized for 100k+ concurrent operations
-   - Tracks queue time metrics
-
-3. **LoadWorkerActor** (`src/LoadSurge/Actors/LoadWorkerActor.cs`)
-   - Task-based implementation using Task.Run
-   - Good for moderate load scenarios (<10k RPS)
-   - Simpler implementation, higher overhead
-
-4. **ResultCollectorActor** (`src/LoadSurge/Actors/ResultCollectorActor.cs`)
-   - Aggregates all performance metrics
-   - Calculates latency percentiles (P50, P95, P99)
-   - Tracks resource utilization and memory usage
-
-### Execution Modes
-
-**LoadWorkerMode:**
-- `Hybrid` (default) - Channel-based with fixed worker pool, best for high throughput (100k+ RPS)
-- `TaskBased` - Task.Run based, best for moderate load (<10k RPS)
-- `ActorBased` - **NOT IMPLEMENTED** - Throws exception if selected (reserved for future actor-based isolation)
+### Termination & Limits
 
 **TerminationMode:**
-- `Duration` - Stop immediately when duration expires (fastest)
-- `CompleteCurrentInterval` - Finish current batch before stopping (recommended for accurate counts)
-- `StrictDuration` - Hard stop at duration, cancel in-flight requests
+- `Duration` - Stop scheduling when elapsed ≥ Duration, then drain in-flight up to grace period
+- `CompleteCurrentInterval` - Schedule every batch whose slot begins within Duration (predictable counts), then drain
+- `StrictDuration` - Stop scheduling at Duration, **no drain**; unfinished work reported in `RequestsInFlight`
 
-### Message Protocol
+The run spans the full `Duration` window (Time/RPS are schedule-normalized), except `MaxIterations` completes early once the budget is spent.
 
-Actors communicate via immutable message objects (`src/LoadSurge/Messages/`):
+**LoadSettings:**
+- `MaxIterations` (nullable) - Stop after exactly N executions; dropped iterations do not consume the budget
+- `RequestTimeout` (nullable) - Per-request timeout; hung requests counted as failures. With `ActionWithCancellation` the token fires on timeout (work truly aborted); with legacy `Action` the task keeps running unobserved
+- `GracefulStopTimeout` (nullable) - Default: 30% of Duration, clamped to [5s, 60s] (`EffectiveGracefulStopTimeout`)
 
-- `StartLoadMessage` - Initiates test execution
-- `RequestStartedMessage` - Tracks request lifecycle
-- `StepResultMessage` - Reports individual result (success/failure, latency, queue time)
-- `BatchCompletedMessage` - Marks batch completion
-- `WorkerThreadCountMessage` - Reports worker pool size
-- `GetLoadResultMessage` - Requests final aggregated results
+**Actions:** exactly one of `LoadExecutionPlan.Action` (`Func<Task<bool>>`) or `ActionWithCancellation` (`Func<CancellationToken, Task<bool>>`, preferred) must be set. Both set or both null → validation error.
 
-### LoadWorkerConfiguration Options
+**Cancellation:** `LoadRunner.Run(plan, config, ct)` - cancelling stops scheduling, cancels in-flight cancellation-aware actions, skips drain, and **returns partial results** (does not throw `OperationCanceledException` - documented deliberate deviation, partial data is the point of a load test).
 
-Fine-tune load test execution with these configuration settings:
+**Validation:** `LoadRunner.Validate` fails fast: `Concurrency >= 1`, `Duration > 0`, `Interval > 0` (zero would spin the scheduler), positive `MaxIterations`/`RequestTimeout`/`MaxInFlight`, non-negative `GracefulStopTimeout`.
 
-```csharp
-var config = new LoadWorkerConfiguration
-{
-    Mode = LoadWorkerMode.Hybrid,              // Execution mode (Hybrid/TaskBased)
-    MaxWorkerThreads = null,                   // null = auto-calculate based on CPU and concurrency
-    ChannelCapacity = null,                    // null = unbounded (higher memory, better throughput)
-    EnableDetailedMetrics = false,             // Enable comprehensive monitoring (impacts performance)
-    WorkerUtilizationWarningThreshold = 0.8,   // Warn if worker efficiency < 80%
-    QueueTimeWarningThreshold = 1000           // Warn if queue time > 1000ms
-};
-```
+**LoadWorkerConfiguration:**
+- `MaxInFlight` (nullable, default null = unlimited) - Safety cap protecting the test process from OOM when the SUT hangs; excess iterations are dropped and counted in `LoadResult.Dropped`
+- `Mode`, `MaxWorkerThreads`, `ChannelCapacity` - **obsolete since v3.0.0, ignored**. Do not use in new code
 
-**Configuration Guidelines:**
-- `MaxWorkerThreads`: Leave null for auto-sizing or set for predictable resource usage
-- `ChannelCapacity`: Use bounded (e.g., 10000) for memory-constrained environments
-- `EnableDetailedMetrics`: Turn on for debugging, off for benchmarks
-- Worker utilization < 80% indicates insufficient parallelism or I/O bottlenecks
-- Queue time > 1000ms suggests worker pool saturation
+### LoadResult Metrics
 
-## Key Design Patterns
+- Core: `Total` (= Success + Failure), `Success`, `Failure`, `Time` (s), `RequestsPerSecond`
+- Latency (ms, successes only): `Min/Average/Median/Percentile95/Percentile99/MaxLatency`
+- Flow: `RequestsStarted`, `RequestsInFlight` (unfinished at test end), `Dropped` (MaxInFlight cap), `BatchesCompleted`
+- Queue: `AvgQueueTime`/`MaxQueueTime` (ms) - lag between an iteration's scheduled slot and actual execution start (thread-pool scheduling lag)
+- `PeakMemoryUsage` (bytes) - `GC.GetTotalMemory(false)` sampled every 1024th request start
 
-### Graceful Shutdown
-- In-flight requests are allowed to complete after duration expires
-- Grace period auto-calculated as 30% of test duration (min: 5s, max: 60s)
-- Can be overridden via `LoadSettings.GracefulStopTimeout`
-- Both worker implementations handle graceful shutdown differently:
-  - TaskBased: Waits for tasks with timeout
-  - Hybrid: Completes channel, waits for worker pool
-
-### Worker Pool Sizing (Hybrid Mode)
-```csharp
-baseWorkers = ProcessorCount * 2
-scaledWorkers = Max(baseWorkers, concurrency / 10)
-maxWorkers = Min(1000, ProcessorCount * 50)
-optimalWorkers = Min(scaledWorkers, maxWorkers)
-```
-
-### Percentile Calculation
-- Uses ceiling method for conservative estimates
-- Percentiles calculated from sorted latency list
-- P95 = latencies[ceiling(0.95 * count)]
+Percentiles use the ceiling method over the sorted latency array: `sorted[ceil(p/100 * n) - 1]`.
 
 ## Code Patterns & Conventions
 
 ### Test Actions Must Be:
-1. **Thread-safe** - Will be called concurrently
-2. **Idempotent** - Safe to retry
+1. **Thread-safe** - called concurrently
+2. **Idempotent** - safe to retry
 3. **Return Task<bool>** - true = success, false = failure
 
-Example:
 ```csharp
 Action = async () =>
 {
@@ -200,111 +138,27 @@ Action = async () =>
 }
 ```
 
-### Actor Pattern Usage
-- Use `Tell` for fire-and-forget messages
-- Use `Ask<T>` for request-response with timeout
-- Use `PipeTo` for async continuation with sender context
-- Always dispose ActorSystem after use
-
-### Timing & Scheduling
-- Use `DateTime.UtcNow` for all timing
-- Maintain interval precision with calculated next execution times
-- Monitor schedule drift and log warnings
-
-## Important Implementation Details
-
-### LoadResult Metrics
-
-The `LoadResult` object provides comprehensive performance metrics:
-
-**Core Metrics:**
-- `ScenarioName` / `Name` - Test scenario identifier
-- `Total` - Sum of successful and failed operations
-- `Success` - Operations completed successfully
-- `Failure` - Operations that failed
-- `Time` - Total execution time in seconds
-- `RequestsPerSecond` - Calculated throughput
-
-**Latency Metrics (milliseconds):**
-- `MinLatency` - Best-case response time
-- `AverageLatency` - Mean response time across all operations
-- `MedianLatency` - 50th percentile (P50)
-- `Percentile95Latency` - 95% of requests complete within this time (P95)
-- `Percentile99Latency` - 99% of requests complete within this time (P99)
-- `MaxLatency` - Worst-case response time
-
-**Request Tracking:**
-- `RequestsStarted` - Total initiated requests (may exceed Total if test stops mid-flight)
-- `RequestsInFlight` - Currently executing requests at test end
-- `BatchesCompleted` - Number of execution batches processed
-
-**Queue Metrics (Hybrid Mode Only):**
-- `AvgQueueTime` - Average time requests wait before execution (ms)
-- `MaxQueueTime` - Maximum queue wait time observed (ms)
-- High queue times indicate worker pool saturation
-
-**Resource Metrics:**
-- `WorkerThreadsUsed` - Number of worker threads in hybrid mode
-- `WorkerUtilization` - Efficiency percentage (0.0-1.0)
-- `PeakMemoryUsage` - Maximum memory consumption in bytes
-
-### Request Counting
-- `RequestsStarted` tracks all initiated requests
-- `RequestsInFlight` tracks currently executing requests
-- `Total` tracks completed requests (Success + Failed)
-- In CI environments, allow variance (±10%) for timing-sensitive tests
-
-### Queue Time Tracking (Hybrid Mode Only)
-- Measures time from work item creation to execution start
-- Helps identify scheduling bottlenecks vs. execution bottlenecks
-- Not available in TaskBased mode
-- High queue times (>1000ms) indicate worker pool saturation
-
-### Memory Monitoring
-- Peak memory captured during `RequestStartedMessage` processing
-- Uses `GC.GetTotalMemory(false)` for snapshot
-- Reported in `LoadResult.PeakMemoryUsage` (bytes)
-
-### Adaptive Timeouts
-Worker timeout calculation:
-```csharp
-var testDuration = settings.Duration.TotalSeconds;
-var workerTimeout = TimeSpan.FromSeconds(Math.Max(60, testDuration + 60));
-```
-This ensures resilience in CI environments where execution may be slower.
+### Internals & Testability
+- `Engine/` classes are `internal`; tests access them via `InternalsVisibleTo("LoadSurge.Tests")` in the csproj
+- The engine must never throw from a spawned iteration — `ExecuteOneAsync` catches everything and records a failure
 
 ## Testing Guidelines
 
 ### Test File Organization
 All tests in `tests/LoadSurge.Tests/Unit/`:
-- `HybridModeTests.cs` - High-concurrency scenarios
-- `RequestCountAccuracyTests.cs` - Request counting validation
+- `LoadEngineTests.cs` - Open-model semantics: slow responses, MaxInFlight drops, RequestTimeout, StrictDuration, graceful drain
+- `MetricsCollectorTests.cs` - Percentiles, failure-latency exclusion, concurrent-recording exactness
+- `ValidationTests.cs` - Fail-fast input validation
+- `CancellationTests.cs` - Run cancellation, token propagation, timeout-cancels-work
+- `RequestCountAccuracyTests.cs` - Request counting per termination mode
 - `GracefulStopConfigurationTests.cs` - Shutdown behavior
-- `LoadRunnerTimeoutTests.cs` - Timeout and error handling
-- `BackwardCompatibilityTests.cs` - Legacy support
-
-### Test Patterns
-```csharp
-[Fact]
-public async Task Descriptive_Test_Name()
-{
-    // Arrange - Create plan with settings
-    var plan = new LoadExecutionPlan { /* ... */ };
-
-    // Act - Execute load test
-    var result = await LoadRunner.Run(plan);
-
-    // Assert - Validate results
-    Assert.True(result.Total >= expectedMin);
-    Assert.True(result.Total <= expectedMax); // Allow timing variance
-}
-```
+- `LoadRunnerTimeoutTests.cs` - End-to-end completion without hangs
+- `HighConcurrencyTests.cs`, `BackwardCompatibilityTests.cs` - Load/compat coverage
 
 ### Timing Variance in Tests
-- CI environments may introduce timing variance
-- Allow ±10% variance for request count assertions
+- Allow ±10% (or looser) variance for request count assertions in timing-sensitive tests
 - Use `Assert.True(result.Total >= X && result.Total <= Y)` pattern
-- For StrictDuration tests, variance should be minimal
+- Only `MaxIterations` tests may assert exact counts
 
 ## CI/CD
 
@@ -314,70 +168,57 @@ public async Task Descriptive_Test_Name()
 - **Security Job:** Scans for vulnerabilities
 
 ### NuGet Publishing
-- Automatic on main branch commits (version: 1.0.0.{GITHUB_RUN_NUMBER})
-- Automatic on version tags (e.g., `v1.0.1` uses exact tag version)
+- Automatic on main branch commits — CI reads the base version from the csproj and publishes `{base}.{GITHUB_RUN_NUMBER}` (e.g. `3.0.0.42`).
+- Automatic on version tags (e.g., `v3.0.1` uses exact tag version)
 - Requires `NUGET_API_KEY` secret in repository
-- Package includes symbols and source link for debugging
 
 ## Common Scenarios
 
 ### Adding New Termination Mode
 1. Add enum value to `Models/TerminationMode.cs`
-2. Implement logic in both worker actors (TaskBased and Hybrid)
-3. Add tests in `RequestCountAccuracyTests.cs`
-4. Update README examples
+2. Implement in the scheduler loop and drain logic in `Engine/LoadEngine.cs`
+3. Add tests in `LoadEngineTests.cs` / `RequestCountAccuracyTests.cs`
 
 ### Adding New Metrics
-1. Add field to `ResultCollectorActor` state
-2. Create message type in `Messages/` if needed
-3. Update `LoadResult` model
-4. Handle message in `ResultCollectorActor`
-5. Add tests to validate new metric
-
-### Performance Optimization
-- Profile with high-concurrency scenarios (20k+ RPS)
-- Monitor queue time in hybrid mode for scheduling bottlenecks
-- Check worker utilization (should be <80%)
-- Review `PeakMemoryUsage` for memory leaks
-- Use `EnableDetailedMetrics` for deeper analysis
+1. Add accumulation to `Engine/MetricsCollector.cs` (stripe field for hot-path data, `Interlocked` for global counters)
+2. Add property to `LoadResult`, populate in `BuildResult`
+3. Add tests in `MetricsCollectorTests.cs`
 
 ## Project Structure
 
 ```
 LoadSurge/
-├── src/LoadSurge/           # Main library
-│   ├── Actors/              # Worker and collector actors
-│   ├── Configuration/       # LoadWorkerConfiguration, modes
-│   ├── Messages/            # Actor message contracts
-│   ├── Models/              # LoadExecutionPlan, LoadResult, LoadSettings
-│   └── Runner/              # LoadRunner entry point
-├── tests/LoadSurge.Tests/   # xUnit test suite
-│   └── Unit/                # Unit and integration tests
-├── .github/workflows/       # CI/CD configuration
+├── src/LoadSurge/
+│   ├── Engine/              # LoadEngine (scheduler + execution), MetricsCollector
+│   ├── Configuration/       # LoadWorkerConfiguration (MaxInFlight; obsolete legacy knobs)
+│   ├── Models/              # LoadExecutionPlan, LoadResult, LoadSettings, TerminationMode
+│   ├── Runner/              # LoadRunner entry point + validation
+│   └── PublicAPI.*.txt      # Declared public API surface (analyzer-enforced)
+├── tests/LoadSurge.Tests/Unit/
+├── benchmarks/LoadSurge.Benchmarks/  # BenchmarkDotNet (zero-alloc proof)
+├── .github/workflows/       # CI/CD
+├── .editorconfig            # Style conventions
 ├── Directory.Packages.props # Central package management
-└── LoadSurge.sln           # Solution file
-
-Key files:
-- src/LoadSurge/LoadSurge.csproj - Package configuration
-- global.json - .NET SDK version (8.0)
+└── LoadSurge.sln
 ```
 
 ### Build Configuration
+- `TreatWarningsAsErrors: true` (Release mode)
+- `Nullable: enable`, `LangVersion: 12`, `GenerateDocumentationFile: true` (XML docs required on public members)
+- `AnalysisLevel: latest-recommended` - CA rules enabled; keep the build warning-free
+- `Deterministic: true`, SourceLink + symbols
 
-**Quality Settings:**
-- `TreatWarningsAsErrors: true` (Release mode) - Enforces clean builds
-- `Nullable: enable` - C# nullable reference types for safety
-- `GenerateDocumentationFile: true` - XML documentation required
-- `Deterministic: true` - Reproducible builds
-- `IncludeSymbols/IncludeSource: true` - Full debugging support
-- `LangVersion: 12` - C# 12 language features
+### Public API Tracking (PublicApiAnalyzers)
+The public API surface is declared in `src/LoadSurge/PublicAPI.Shipped.txt` (released) and `PublicAPI.Unshipped.txt` (pending). Adding/changing/removing a public member without updating these files fails the build (RS0016/RS0017) — this is the guard against accidental breaking changes.
+- New public API → add the entry to `PublicAPI.Unshipped.txt` (or run `dotnet format analyzers src/LoadSurge/LoadSurge.csproj --diagnostics RS0016`)
+- On release → move Unshipped entries into Shipped
+- Note: analyzer pinned to 3.3.4 — newer versions need a newer Roslyn than the .NET 8 SDK ships (CS9057)
 
 ## Backward Compatibility
 
-LoadSurge maintains backward compatibility with previous versions:
-- Default behavior unchanged (now using Hybrid mode)
-- Legacy configurations supported
-- API surface remains stable
+- Public API stable since 1.x: `LoadRunner.Run`, `LoadExecutionPlan`, `LoadSettings`, `LoadResult`, `TerminationMode`
+- **v3.0.0:** Akka.NET removed; `Mode`/`MaxWorkerThreads`/`ChannelCapacity` obsolete and ignored; single open-model engine
+- **v2.0.0:** `required` keyword removed from model properties (netstandard2.0 consumers). Do not reintroduce `required` on public models
 - Tests in `BackwardCompatibilityTests.cs` ensure compatibility
 
 ## References
@@ -385,4 +226,3 @@ LoadSurge maintains backward compatibility with previous versions:
 - **Repository:** https://github.com/mrviduus/LoadSurge
 - **NuGet Package:** https://www.nuget.org/packages/LoadSurge
 - **Parent Project:** https://github.com/mrviduus/xUnitV3LoadFramework
-- **Akka.NET Docs:** https://getakka.net/articles/intro/what-is-akka.html

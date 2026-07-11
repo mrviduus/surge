@@ -7,13 +7,6 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
   <!-- Package Version Management -->
-  <ItemGroup Label="Core Framework Dependencies">
-    <!-- Akka.NET Actor Framework -->
-    <PackageVersion Include="Akka" Version="1.5.61" />
-    <!-- NetStandard 2.0 compatibility packages -->
-    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.3" />
-    <PackageVersion Include="System.Threading.Channels" Version="10.0.3" />
-  </ItemGroup>
   <ItemGroup Label="Testing Dependencies">
     <!-- xUnit v3 Core Dependencies -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
@@ -27,7 +20,13 @@
     <!-- Microsoft Testing Platform -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
   </ItemGroup>
+  <ItemGroup Label="Benchmarking">
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
   <ItemGroup Label="Development and Build Tools">
+    <!-- Public API surface tracking - build fails on accidental breaking changes -->
+    <!-- 3.3.4: last version compatible with the Roslyn shipped in .NET 8 SDK (CS9057 otherwise) -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" />
     <!-- Source Link for GitHub - Enables debugging of NuGet package source code -->
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.103">
       <PrivateAssets>all</PrivateAssets>

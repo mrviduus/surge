@@ -89,7 +89,9 @@ jobs:
         if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
           VERSION="${GITHUB_REF#refs/tags/v}"
         else
-          VERSION="1.0.0.${{ github.run_number }}"
+          # Base version from the csproj; run number appended as the 4th part
+          BASE_VERSION=$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' src/LoadSurge/LoadSurge.csproj)
+          VERSION="${BASE_VERSION}.${{ github.run_number }}"
         fi
         echo "VERSION=$VERSION" >> $GITHUB_ENV
         echo "Version set to: $VERSION"

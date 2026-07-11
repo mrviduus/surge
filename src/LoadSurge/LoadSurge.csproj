@@ -5,22 +5,23 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>12</LangVersion>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
 
     <!-- Package Metadata -->
     <PackageId>LoadSurge</PackageId>
-    <Version>2.0.0</Version>
+    <Version>3.0.0</Version>
     <Authors>Vasyl Vdovychenko</Authors>
     <Company>Vasyl Vdovychenko</Company>
     <Product>LoadSurge</Product>
-    <Description>LoadSurge - High-performance, actor-based load testing framework for .NET. Built on Akka.NET for distributed, fault-tolerant load testing. Framework-agnostic core engine supporting any testing framework or standalone usage. Perfect for testing APIs, microservices, and distributed systems under load.</Description>
-    <PackageTags>load-testing;performance;stress-testing;actor-model;akka;dotnet;distributed;high-performance;concurrent;load-test;performance-testing</PackageTags>
+    <Description>LoadSurge - High-performance, dependency-free load testing framework for .NET. Open workload model (constant arrival rate) with zero-allocation hot path. Framework-agnostic core engine supporting any testing framework or standalone usage. Perfect for testing APIs, microservices, and distributed systems under load.</Description>
+    <PackageTags>load-testing;performance;stress-testing;dotnet;high-performance;concurrent;load-test;performance-testing;open-model;arrival-rate</PackageTags>
     <PackageProjectUrl>https://github.com/mrviduus/LoadSurge</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mrviduus/LoadSurge</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>Version 2.0.0: Migrated to netstandard2.0 for broader .NET compatibility (.NET Framework 4.7.2+, .NET 6/8/9+). Breaking change: removed 'required' keyword from model properties.</PackageReleaseNotes>
+    <PackageReleaseNotes>Version 3.0.0: Removed Akka.NET - zero external dependencies. New open-workload-model engine (constant arrival rate): task-per-arrival, lock-striped metrics, allocation-free hot path. New: LoadSettings.RequestTimeout, LoadWorkerConfiguration.MaxInFlight (k6-style dropped iterations), LoadResult.Dropped. Obsolete (ignored): Mode, MaxWorkerThreads, ChannelCapacity. Fixed: graceful-stop race, failure latency skewing percentiles.</PackageReleaseNotes>
 
     <!-- Build Settings -->
     <IsPackable>true</IsPackable>
@@ -37,15 +38,26 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Akka" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
-    <PackageReference Include="System.Threading.Channels" />
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
     <None Include="../../icon.png" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LoadSurge.Tests" />
+    <InternalsVisibleTo Include="LoadSurge.Benchmarks" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">

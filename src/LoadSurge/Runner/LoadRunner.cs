@@ -1,124 +1,113 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
-// Import Akka.NET actor framework for distributed load testing architecture
-// Provides the foundation for fault-tolerant, scalable, message-driven actors
-using Akka.Actor;
-// Import load testing actors for worker and result collection functionality
-// Contains specialized actors for executing load tests and aggregating results
-using LoadSurge.Actors;
-// Import configuration settings for customizing load worker behavior
-// Defines different execution modes and performance tuning options
 using LoadSurge.Configuration;
-// Import message types for actor communication and coordination
-// Contains all message contracts used for inter-actor communication
-using LoadSurge.Messages;
-// Import data models for load test execution plans and results
-// Defines the structure for test configuration and result aggregation
+using LoadSurge.Engine;
 using LoadSurge.Models;
 
-// Define the namespace for load test orchestration and execution
 namespace LoadSurge.Runner
 {
 	/// <summary>
-	/// Main entry point for executing load tests using actor-based architecture.
-	/// Orchestrates the creation and coordination of load worker and result collector actors.
-	/// Provides both synchronous and asynchronous execution patterns with comprehensive metrics collection.
+	/// Main entry point for executing load tests.
+	/// Runs the open-workload-model engine (constant arrival rate): iterations are injected
+	/// on schedule regardless of response times, so in-flight requests accumulate under a
+	/// slow system - exactly what a load test must measure.
 	/// </summary>
 	public static class LoadRunner
 	{
 		/// <summary>
 		/// Executes a load test with default configuration settings.
-		/// This is a convenience method that uses the hybrid load worker mode with default settings.
 		/// </summary>
 		/// <param name="executionPlan">The load test execution plan containing test action and settings</param>
 		/// <returns>Aggregated load test results including performance metrics</returns>
-		public static async Task<LoadResult> Run(LoadExecutionPlan executionPlan)
+		public static Task<LoadResult> Run(LoadExecutionPlan executionPlan)
 		{
-			// Delegate to the main Run method with default configuration
-			// Uses LoadWorkerConfiguration() which defaults to Hybrid mode for optimal performance
-			return await Run(executionPlan, new LoadWorkerConfiguration());
+			return Run(executionPlan, null, CancellationToken.None);
 		}
 
 		/// <summary>
 		/// Executes a load test with specified configuration settings.
-		/// Creates an actor system to manage load workers and result collection.
-		/// Supports multiple execution modes for different performance characteristics.
 		/// </summary>
 		/// <param name="executionPlan">The load test execution plan containing test action and settings</param>
-		/// <param name="configuration">Optional configuration for load worker behavior and performance tuning</param>
+		/// <param name="configuration">Optional configuration for engine behavior (e.g. MaxInFlight safety cap)</param>
 		/// <returns>Aggregated load test results with detailed performance metrics</returns>
-		public static async Task<LoadResult> Run(
-			LoadExecutionPlan executionPlan, 
+		public static Task<LoadResult> Run(
+			LoadExecutionPlan executionPlan,
 			LoadWorkerConfiguration? configuration = null)
 		{
-			// Validate that the execution plan contains a valid test action
-			// Ensures we have a test action to execute before proceeding
-			if (executionPlan.Action == null)
-				throw new ArgumentNullException(nameof(executionPlan.Action));
+			return Run(executionPlan, configuration, CancellationToken.None);
+		}
 
-			// Use default configuration if none provided, enabling flexible test execution
-			// Default configuration uses Hybrid mode for optimal performance characteristics
+		/// <summary>
+		/// Executes a load test with specified configuration settings and cancellation support.
+		/// Cancelling stops scheduling new iterations, cancels in-flight cancellation-aware actions,
+		/// and returns the partial results collected so far (it does not throw
+		/// <see cref="OperationCanceledException"/> - partial data is the point of a load test).
+		/// </summary>
+		/// <param name="executionPlan">The load test execution plan containing test action and settings</param>
+		/// <param name="configuration">Optional configuration for engine behavior (e.g. MaxInFlight safety cap)</param>
+		/// <param name="cancellationToken">Token to stop the run early</param>
+		/// <returns>Aggregated load test results with detailed performance metrics</returns>
+		public static async Task<LoadResult> Run(
+			LoadExecutionPlan executionPlan,
+			LoadWorkerConfiguration? configuration,
+			CancellationToken cancellationToken)
+		{
+			Validate(executionPlan, configuration);
+
 			configuration ??= new LoadWorkerConfiguration();
 
-			// Create a new actor system for this load test execution to ensure isolation
-			// The actor system manages all actors and provides fault tolerance and supervision
-			using var actorSystem = ActorSystem.Create("LoadTestSystem");
-			
-			// Create a result collector actor to aggregate metrics from all load workers
-			// This actor will collect timing, success/failure, and performance data from worker threads
-			// Uses the execution plan name for tracking and logging purposes
-			var resultCollector = actorSystem.ActorOf(
-				Props.Create(() => new ResultCollectorActor(executionPlan.Name)),
-				"resultCollector"
-			);
+			return await LoadEngine.RunAsync(executionPlan, configuration, cancellationToken).ConfigureAwait(false);
+		}
 
-			// Create the appropriate load worker actor based on configuration mode
-			// Different modes provide varying levels of performance and resource usage
-			// Pattern matching ensures type safety and exhaustive mode coverage
-			var loadWorkerProps = configuration.Mode switch
-			{
-				// Task-based mode: Uses .NET Task.Run for concurrent execution
-				// Suitable for moderate load scenarios with good thread pool management
-				LoadWorkerMode.TaskBased => Props.Create(() => 
-					new LoadWorkerActor(executionPlan, resultCollector)),
-					
-				// Hybrid mode: Uses fixed thread pool with channels for high-performance scenarios
-				// Optimized for high-throughput scenarios (100k+ requests) with minimal overhead
-				LoadWorkerMode.Hybrid => Props.Create(() => 
-					new LoadWorkerActorHybrid(executionPlan, resultCollector)),
-					
-				// Throw exception for unsupported modes to fail fast during development
-				// Ensures all modes are explicitly implemented and prevents silent failures
-				_ => throw new ArgumentException($"LoadWorkerMode {configuration.Mode} is not yet implemented")
-			};
+		/// <summary>
+		/// Validates the execution plan and configuration, failing fast with actionable messages.
+		/// </summary>
+		private static void Validate(LoadExecutionPlan executionPlan, LoadWorkerConfiguration? configuration)
+		{
+			if (executionPlan == null)
+				throw new ArgumentNullException(nameof(executionPlan));
 
-			// Create and start the load worker actor within the actor system
-			// The worker name "worker" provides a consistent identity for logging and monitoring
-			var worker = actorSystem.ActorOf(loadWorkerProps, "worker");
+			if (executionPlan.Action == null && executionPlan.ActionWithCancellation == null)
+				throw new ArgumentNullException(nameof(executionPlan),
+					"Set either LoadExecutionPlan.Action or LoadExecutionPlan.ActionWithCancellation.");
 
-			// Send start message to worker and wait for completion with adaptive timeout
-			// The timeout uses a more generous buffer to account for system load and actor overhead
-			// Increased buffer from 20 to 60 seconds and minimum from 30 to 60 seconds for CI resilience
-			var workerTimeout = TimeSpan.FromSeconds(Math.Max(60, executionPlan.Settings.Duration.TotalSeconds + 60));
-			
-			try
-			{
-				var result = await worker.Ask<LoadResult>(
-					new StartLoadMessage(),
-					workerTimeout
-				);
+			if (executionPlan.Action != null && executionPlan.ActionWithCancellation != null)
+				throw new ArgumentException(
+					"Set only one of LoadExecutionPlan.Action or LoadExecutionPlan.ActionWithCancellation, not both.",
+					nameof(executionPlan));
 
-				// Return the result directly from the worker
-				// No need to ask the result collector separately since the worker already aggregates results
-				return result;
-			}
-			catch (TimeoutException ex)
-			{
-				throw new TimeoutException(
-					$"Load test worker timed out after {workerTimeout.TotalSeconds} seconds. " +
-					$"Test duration was {executionPlan.Settings.Duration.TotalSeconds} seconds. " +
-					$"Consider increasing test timeout or reducing test complexity.", ex);
-			}
+			var settings = executionPlan.Settings;
+			if (settings == null)
+				throw new ArgumentNullException(nameof(executionPlan), "LoadExecutionPlan.Settings must not be null.");
+
+			if (settings.Concurrency <= 0)
+				throw new ArgumentOutOfRangeException(nameof(executionPlan), settings.Concurrency,
+					"LoadSettings.Concurrency must be at least 1.");
+
+			if (settings.Duration <= TimeSpan.Zero)
+				throw new ArgumentOutOfRangeException(nameof(executionPlan), settings.Duration,
+					"LoadSettings.Duration must be positive.");
+
+			if (settings.Interval <= TimeSpan.Zero)
+				throw new ArgumentOutOfRangeException(nameof(executionPlan), settings.Interval,
+					"LoadSettings.Interval must be positive; a zero interval would spin the scheduler at 100% CPU.");
+
+			if (settings.MaxIterations.HasValue && settings.MaxIterations.Value <= 0)
+				throw new ArgumentOutOfRangeException(nameof(executionPlan), settings.MaxIterations,
+					"LoadSettings.MaxIterations must be at least 1 when set.");
+
+			if (settings.RequestTimeout.HasValue && settings.RequestTimeout.Value <= TimeSpan.Zero)
+				throw new ArgumentOutOfRangeException(nameof(executionPlan), settings.RequestTimeout,
+					"LoadSettings.RequestTimeout must be positive when set.");
+
+			if (settings.GracefulStopTimeout.HasValue && settings.GracefulStopTimeout.Value < TimeSpan.Zero)
+				throw new ArgumentOutOfRangeException(nameof(executionPlan), settings.GracefulStopTimeout,
+					"LoadSettings.GracefulStopTimeout cannot be negative.");
+
+			if (configuration?.MaxInFlight is int maxInFlight && maxInFlight <= 0)
+				throw new ArgumentOutOfRangeException(nameof(configuration), maxInFlight,
+					"LoadWorkerConfiguration.MaxInFlight must be at least 1 when set.");
 		}
 	}
 }

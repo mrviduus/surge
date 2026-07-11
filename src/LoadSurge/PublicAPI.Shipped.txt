@@ -1,0 +1,102 @@
+#nullable enable
+LoadSurge.Configuration.LoadWorkerConfiguration
+LoadSurge.Configuration.LoadWorkerConfiguration.ChannelCapacity.get -> int?
+LoadSurge.Configuration.LoadWorkerConfiguration.ChannelCapacity.set -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.EnableDetailedMetrics.get -> bool
+LoadSurge.Configuration.LoadWorkerConfiguration.EnableDetailedMetrics.set -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.LoadWorkerConfiguration() -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.MaxInFlight.get -> int?
+LoadSurge.Configuration.LoadWorkerConfiguration.MaxInFlight.set -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.MaxWorkerThreads.get -> int?
+LoadSurge.Configuration.LoadWorkerConfiguration.MaxWorkerThreads.set -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.Mode.get -> LoadSurge.Configuration.LoadWorkerMode
+LoadSurge.Configuration.LoadWorkerConfiguration.Mode.set -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.QueueTimeWarningThreshold.get -> double
+LoadSurge.Configuration.LoadWorkerConfiguration.QueueTimeWarningThreshold.set -> void
+LoadSurge.Configuration.LoadWorkerConfiguration.WorkerUtilizationWarningThreshold.get -> double
+LoadSurge.Configuration.LoadWorkerConfiguration.WorkerUtilizationWarningThreshold.set -> void
+LoadSurge.Configuration.LoadWorkerMode
+LoadSurge.Configuration.LoadWorkerMode.ActorBased = 1 -> LoadSurge.Configuration.LoadWorkerMode
+LoadSurge.Configuration.LoadWorkerMode.Hybrid = 2 -> LoadSurge.Configuration.LoadWorkerMode
+LoadSurge.Configuration.LoadWorkerMode.TaskBased = 0 -> LoadSurge.Configuration.LoadWorkerMode
+LoadSurge.Models.LoadExecutionPlan
+LoadSurge.Models.LoadExecutionPlan.Action.get -> System.Func<System.Threading.Tasks.Task<bool>!>?
+LoadSurge.Models.LoadExecutionPlan.Action.set -> void
+LoadSurge.Models.LoadExecutionPlan.ActionWithCancellation.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<bool>!>?
+LoadSurge.Models.LoadExecutionPlan.ActionWithCancellation.set -> void
+LoadSurge.Models.LoadExecutionPlan.LoadExecutionPlan() -> void
+LoadSurge.Models.LoadExecutionPlan.Name.get -> string!
+LoadSurge.Models.LoadExecutionPlan.Name.set -> void
+LoadSurge.Models.LoadExecutionPlan.Settings.get -> LoadSurge.Models.LoadSettings!
+LoadSurge.Models.LoadExecutionPlan.Settings.set -> void
+LoadSurge.Models.LoadResult
+LoadSurge.Models.LoadResult.AverageLatency.get -> double
+LoadSurge.Models.LoadResult.AverageLatency.set -> void
+LoadSurge.Models.LoadResult.AvgQueueTime.get -> double
+LoadSurge.Models.LoadResult.AvgQueueTime.set -> void
+LoadSurge.Models.LoadResult.BatchesCompleted.get -> int
+LoadSurge.Models.LoadResult.BatchesCompleted.set -> void
+LoadSurge.Models.LoadResult.Dropped.get -> int
+LoadSurge.Models.LoadResult.Dropped.set -> void
+LoadSurge.Models.LoadResult.Failure.get -> int
+LoadSurge.Models.LoadResult.Failure.set -> void
+LoadSurge.Models.LoadResult.LoadResult() -> void
+LoadSurge.Models.LoadResult.MaxLatency.get -> double
+LoadSurge.Models.LoadResult.MaxLatency.set -> void
+LoadSurge.Models.LoadResult.MaxQueueTime.get -> double
+LoadSurge.Models.LoadResult.MaxQueueTime.set -> void
+LoadSurge.Models.LoadResult.MedianLatency.get -> double
+LoadSurge.Models.LoadResult.MedianLatency.set -> void
+LoadSurge.Models.LoadResult.MinLatency.get -> double
+LoadSurge.Models.LoadResult.MinLatency.set -> void
+LoadSurge.Models.LoadResult.Name.get -> string!
+LoadSurge.Models.LoadResult.Name.set -> void
+LoadSurge.Models.LoadResult.PeakMemoryUsage.get -> long
+LoadSurge.Models.LoadResult.PeakMemoryUsage.set -> void
+LoadSurge.Models.LoadResult.Percentile95Latency.get -> double
+LoadSurge.Models.LoadResult.Percentile95Latency.set -> void
+LoadSurge.Models.LoadResult.Percentile99Latency.get -> double
+LoadSurge.Models.LoadResult.Percentile99Latency.set -> void
+LoadSurge.Models.LoadResult.RequestsInFlight.get -> int
+LoadSurge.Models.LoadResult.RequestsInFlight.set -> void
+LoadSurge.Models.LoadResult.RequestsPerSecond.get -> double
+LoadSurge.Models.LoadResult.RequestsPerSecond.set -> void
+LoadSurge.Models.LoadResult.RequestsStarted.get -> int
+LoadSurge.Models.LoadResult.RequestsStarted.set -> void
+LoadSurge.Models.LoadResult.ScenarioName.get -> string!
+LoadSurge.Models.LoadResult.ScenarioName.set -> void
+LoadSurge.Models.LoadResult.Success.get -> int
+LoadSurge.Models.LoadResult.Success.set -> void
+LoadSurge.Models.LoadResult.Time.get -> double
+LoadSurge.Models.LoadResult.Time.set -> void
+LoadSurge.Models.LoadResult.Total.get -> int
+LoadSurge.Models.LoadResult.Total.set -> void
+LoadSurge.Models.LoadResult.WorkerThreadsUsed.get -> int
+LoadSurge.Models.LoadResult.WorkerThreadsUsed.set -> void
+LoadSurge.Models.LoadResult.WorkerUtilization.get -> double
+LoadSurge.Models.LoadResult.WorkerUtilization.set -> void
+LoadSurge.Models.LoadSettings
+LoadSurge.Models.LoadSettings.Concurrency.get -> int
+LoadSurge.Models.LoadSettings.Concurrency.set -> void
+LoadSurge.Models.LoadSettings.Duration.get -> System.TimeSpan
+LoadSurge.Models.LoadSettings.Duration.set -> void
+LoadSurge.Models.LoadSettings.EffectiveGracefulStopTimeout.get -> System.TimeSpan
+LoadSurge.Models.LoadSettings.GracefulStopTimeout.get -> System.TimeSpan?
+LoadSurge.Models.LoadSettings.GracefulStopTimeout.set -> void
+LoadSurge.Models.LoadSettings.Interval.get -> System.TimeSpan
+LoadSurge.Models.LoadSettings.Interval.set -> void
+LoadSurge.Models.LoadSettings.LoadSettings() -> void
+LoadSurge.Models.LoadSettings.MaxIterations.get -> int?
+LoadSurge.Models.LoadSettings.MaxIterations.set -> void
+LoadSurge.Models.LoadSettings.RequestTimeout.get -> System.TimeSpan?
+LoadSurge.Models.LoadSettings.RequestTimeout.set -> void
+LoadSurge.Models.LoadSettings.TerminationMode.get -> LoadSurge.Models.TerminationMode
+LoadSurge.Models.LoadSettings.TerminationMode.set -> void
+LoadSurge.Models.TerminationMode
+LoadSurge.Models.TerminationMode.CompleteCurrentInterval = 1 -> LoadSurge.Models.TerminationMode
+LoadSurge.Models.TerminationMode.Duration = 0 -> LoadSurge.Models.TerminationMode
+LoadSurge.Models.TerminationMode.StrictDuration = 2 -> LoadSurge.Models.TerminationMode
+LoadSurge.Runner.LoadRunner
+static LoadSurge.Runner.LoadRunner.Run(LoadSurge.Models.LoadExecutionPlan! executionPlan) -> System.Threading.Tasks.Task<LoadSurge.Models.LoadResult!>!
+static LoadSurge.Runner.LoadRunner.Run(LoadSurge.Models.LoadExecutionPlan! executionPlan, LoadSurge.Configuration.LoadWorkerConfiguration? configuration = null) -> System.Threading.Tasks.Task<LoadSurge.Models.LoadResult!>!
+static LoadSurge.Runner.LoadRunner.Run(LoadSurge.Models.LoadExecutionPlan! executionPlan, LoadSurge.Configuration.LoadWorkerConfiguration? configuration, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<LoadSurge.Models.LoadResult!>!

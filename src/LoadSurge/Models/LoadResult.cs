@@ -100,6 +100,13 @@ namespace LoadSurge.Models
 		/// Indicates concurrent load at the time of measurement.
 		/// </summary>
 		public int RequestsInFlight { get; set; }
+
+		/// <summary>
+		/// Gets or sets the number of scheduled iterations that were dropped because the
+		/// MaxInFlight safety cap was reached (k6-style dropped iterations).
+		/// A non-zero value means the system under test could not keep up with the injection rate.
+		/// </summary>
+		public int Dropped { get; set; }
 		
 		// Throughput metrics section - measures system capacity and performance
 		

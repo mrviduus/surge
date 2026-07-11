@@ -94,23 +94,52 @@ var plan = new LoadExecutionPlan
 | `MaxIterations` | Optional max request count |
 | `TerminationMode` | How test stops (Duration, CompleteCurrentInterval, StrictDuration) |
 | `GracefulStopTimeout` | Time to wait for in-flight requests (default: 30% of duration) |
+| `RequestTimeout` | Optional per-request timeout; hung requests counted as failures |
 
-### Execution Modes
+### Workload Model
+
+LoadSurge uses an **open workload model** (constant arrival rate, like NBomber `Inject` / k6 `constant-arrival-rate`): iterations are injected on schedule regardless of response times. If the system under test slows down, in-flight requests accumulate — which is exactly what a load test must measure.
 
 ```csharp
-var config = new LoadWorkerConfiguration { Mode = LoadWorkerMode.Hybrid };
+var config = new LoadWorkerConfiguration
+{
+    MaxInFlight = 10_000  // optional safety cap; excess iterations are dropped and counted
+};
 var result = await LoadRunner.Run(plan, config);
 ```
 
-- **Hybrid** (default) - Channel-based, optimized for high throughput (10k+ RPS)
-- **TaskBased** - Task.Run based, suitable for moderate load
+Per-request timeout and cancellation-aware actions:
+
+```csharp
+var plan = new LoadExecutionPlan
+{
+    Name = "API_Test",
+    Settings = new LoadSettings
+    {
+        // ...
+        RequestTimeout = TimeSpan.FromSeconds(5) // hung requests counted as failures
+    },
+    // Preferred over Action: the token fires on RequestTimeout and run cancellation,
+    // so timed-out work is truly aborted instead of leaking in the background.
+    ActionWithCancellation = async token =>
+    {
+        var response = await httpClient.GetAsync(url, token);
+        return response.IsSuccessStatusCode;
+    }
+};
+
+// Cancelling returns partial results collected so far (no exception).
+var result = await LoadRunner.Run(plan, config, cancellationToken);
+```
 
 ## Results
 
 ```csharp
-result.Total              // Total requests
+result.Total              // Total completed requests
 result.Success            // Successful requests
-result.Failure            // Failed requests
+result.Failure            // Failed requests (incl. timeouts)
+result.Dropped            // Iterations dropped by MaxInFlight cap
+result.RequestsInFlight   // Still executing when the test ended
 result.RequestsPerSecond  // Throughput
 result.AverageLatency     // Mean latency (ms)
 result.Percentile95Latency // P95 latency (ms)

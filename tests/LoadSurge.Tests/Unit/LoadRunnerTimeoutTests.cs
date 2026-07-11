@@ -4,23 +4,14 @@ using Xunit;
 using LoadSurge.Models;
 using LoadSurge.Runner;
 using LoadSurge.Configuration;
-using Akka.Actor;
 
 namespace LoadSurge.Tests.Unit
 {
     /// <summary>
-    /// Tests to reproduce and verify the Akka.ActorTimeoutException issue
-    /// These tests demonstrate the problem and validate the fix
+    /// Tests validating that LoadRunner completes without timeouts across common scenarios.
     /// </summary>
-    public class LoadRunnerTimeoutTests : IDisposable
+    public class LoadRunnerTimeoutTests
     {
-        private readonly ActorSystem _actorSystem;
-
-        public LoadRunnerTimeoutTests()
-        {
-            _actorSystem = ActorSystem.Create("LoadTestSystem");
-        }
-
         [Fact]
         public async Task LoadRunner_Should_Complete_Simple_Test_Without_Timeout()
         {
@@ -191,12 +182,12 @@ namespace LoadSurge.Tests.Unit
         }
 
         [Fact]
-        public async Task LoadRunner_With_Hybrid_Mode_Should_Not_Timeout()
+        public async Task LoadRunner_With_Explicit_Configuration_Should_Not_Timeout()
         {
             // Arrange
             var executionPlan = new LoadExecutionPlan
             {
-                Name = "Hybrid Mode Test",
+                Name = "Explicit Configuration Test",
                 Settings = new LoadSettings
                 {
                     Duration = TimeSpan.FromSeconds(2),
@@ -210,21 +201,13 @@ namespace LoadSurge.Tests.Unit
                 }
             };
 
-            var configuration = new LoadWorkerConfiguration
-            {
-                Mode = LoadWorkerMode.Hybrid
-            };
+            var configuration = new LoadWorkerConfiguration();
 
             // Act & Assert
             var result = await LoadRunner.Run(executionPlan, configuration);
-            
+
             Assert.NotNull(result);
             Assert.True(result.Total > 0);
-        }
-
-        public void Dispose()
-        {
-            _actorSystem?.Terminate().Wait(TimeSpan.FromSeconds(5));
         }
     }
 }

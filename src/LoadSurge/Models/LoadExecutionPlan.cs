@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 // Define namespace for load testing data models and configuration structures
@@ -37,5 +38,14 @@ namespace LoadSurge.Models
         /// Performance of this action directly impacts the overall test results and metrics.
         /// </summary>
         public Func<Task<bool>>? Action { get; set; }
+
+        /// <summary>
+        /// Gets or sets the cancellation-aware test action, preferred over <see cref="Action"/>.
+        /// The provided token is cancelled when the per-request <see cref="LoadSettings.RequestTimeout"/>
+        /// elapses or when the caller cancels the test run, allowing the action to abort promptly
+        /// instead of leaking work in the background.
+        /// Exactly one of <see cref="Action"/> or <see cref="ActionWithCancellation"/> must be set.
+        /// </summary>
+        public Func<CancellationToken, Task<bool>>? ActionWithCancellation { get; set; }
     }
 }

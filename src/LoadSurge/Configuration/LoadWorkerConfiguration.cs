@@ -1,38 +1,42 @@
-// Define namespace for load worker configuration and execution mode settings
-// Contains all configuration options that control worker behavior and performance characteristics
+using System;
+
 namespace LoadSurge.Configuration
 {
     /// <summary>
-    /// Configuration settings that control load worker actor behavior and performance characteristics.
-    /// Provides fine-grained control over execution modes, resource utilization, and monitoring thresholds.
-    /// These settings allow optimization for different load testing scenarios and system constraints.
-    /// Enables tuning of worker pools, channels, and performance monitoring for optimal results.
+    /// Configuration settings that control load engine behavior.
+    /// Since v3.0.0 the engine is a single open-workload-model implementation
+    /// (task-per-arrival); worker-pool and channel tuning options are obsolete.
     /// </summary>
     public class LoadWorkerConfiguration
     {
         /// <summary>
-        /// Determines which implementation of LoadWorkerActor to use for test execution.
-        /// Different modes provide varying performance characteristics and resource usage patterns.
-        /// Hybrid mode is default and recommended for most scenarios due to superior scalability.
-        /// Selection should be based on expected concurrency levels and system constraints.
+        /// Obsolete: since v3.0.0 there is a single engine implementation and this value is ignored.
         /// </summary>
+        [Obsolete("Since v3.0.0 there is a single open-model engine; Mode is ignored.")]
         public LoadWorkerMode Mode { get; set; } = LoadWorkerMode.Hybrid;
 
         /// <summary>
-        /// Maximum number of worker threads for hybrid mode execution.
-        /// Controls the size of the fixed worker pool for optimal resource utilization.
-        /// Null value allows automatic calculation based on system resources and concurrency.
-        /// Should be tuned based on CPU cores, expected I/O patterns, and memory constraints.
+        /// Obsolete: since v3.0.0 there is no fixed worker pool (task-per-arrival model); this value is ignored.
+        /// Use MaxInFlight to bound concurrent executions.
         /// </summary>
+        [Obsolete("Since v3.0.0 there is no worker pool; use MaxInFlight to bound concurrency.")]
         public int? MaxWorkerThreads { get; set; }
 
         /// <summary>
-        /// Channel capacity for hybrid mode work item distribution.
-        /// Null value creates unbounded channels for maximum throughput with higher memory usage.
-        /// Bounded channels provide backpressure but may limit peak performance under extreme load.
-        /// Should be set based on memory constraints and expected burst capacity requirements.
+        /// Obsolete: since v3.0.0 the engine does not use channels; this value is ignored.
         /// </summary>
+        [Obsolete("Since v3.0.0 the engine does not use channels; this value is ignored.")]
         public int? ChannelCapacity { get; set; }
+
+        /// <summary>
+        /// Safety cap on the number of concurrently executing requests (open workload model).
+        /// When the cap is reached, newly scheduled iterations are dropped and counted in
+        /// LoadResult.Dropped instead of executing (k6-style dropped iterations).
+        /// Null (default) disables the cap - in-flight requests grow without limit,
+        /// bounded only by test duration. Set this to protect the test process from
+        /// memory exhaustion when the system under test hangs or responds very slowly.
+        /// </summary>
+        public int? MaxInFlight { get; set; }
 
         /// <summary>
         /// Enable detailed performance metrics collection and logging.
@@ -40,7 +44,7 @@ namespace LoadSurge.Configuration
         /// Useful for performance analysis and troubleshooting but should be disabled for production benchmarks.
         /// Includes per-worker statistics, queue times, and resource utilization tracking.
         /// </summary>
-        public bool EnableDetailedMetrics { get; set; } = false;
+        public bool EnableDetailedMetrics { get; set; }
 
         /// <summary>
         /// Worker utilization threshold for logging warnings (0.0 to 1.0).

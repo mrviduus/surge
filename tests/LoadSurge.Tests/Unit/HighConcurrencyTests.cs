@@ -11,7 +11,7 @@ namespace LoadSurge.Tests.Unit
     /// Tests for the default hybrid mode behavior.
     /// Note: The framework uses hybrid mode by default, so these tests validate hybrid functionality.
     /// </summary>
-    public class HybridModeTests : IDisposable
+    public class HighConcurrencyTests : IDisposable
     {
         [Fact]
         public async Task Should_Execute_Exactly_100_Requests_For_10_RPS_10_Seconds()
