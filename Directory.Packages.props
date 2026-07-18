@@ -18,7 +18,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageVersion>
     <!-- Microsoft Testing Platform -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
   </ItemGroup>
   <ItemGroup Label="Benchmarking">
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
@@ -26,9 +26,9 @@
   <ItemGroup Label="Development and Build Tools">
     <!-- Public API surface tracking - build fails on accidental breaking changes -->
     <!-- 3.3.4: last version compatible with the Roslyn shipped in .NET 8 SDK (CS9057 otherwise) -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
     <!-- Source Link for GitHub - Enables debugging of NuGet package source code -->
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300">
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageVersion>
