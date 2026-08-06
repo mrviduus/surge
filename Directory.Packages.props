@@ -26,7 +26,8 @@
   <ItemGroup Label="Development and Build Tools">
     <!-- Public API surface tracking - build fails on accidental breaking changes -->
     <!-- 3.3.4: last version compatible with the Roslyn shipped in .NET 8 SDK (CS9057 otherwise) -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
+    <!-- DO NOT BUMP: 5.x needs Roslyn 4.12+ (.NET 9 SDK); global.json pins the .NET 8 SDK -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" />
     <!-- Source Link for GitHub - Enables debugging of NuGet package source code -->
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301">
       <PrivateAssets>all</PrivateAssets>
