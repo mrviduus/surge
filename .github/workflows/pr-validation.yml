@@ -73,6 +73,9 @@ jobs:
           echo "Running tests in ${{ matrix.configuration }} mode..."
 
           # Run tests with detailed output and coverage
+          # set +e: the default `bash -e` would abort the step on a test failure
+          # before TEST_EXIT_CODE is captured, leaving the output empty
+          set +e
           dotnet test \
             --no-build \
             --configuration ${{ matrix.configuration }} \
@@ -84,10 +87,11 @@ jobs:
             -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover,cobertura
 
           TEST_EXIT_CODE=$?
+          set -e
           echo "test_exit_code=$TEST_EXIT_CODE" >> $GITHUB_OUTPUT
 
-          # Count test results
-          if [ -f "./TestResults/*.trx" ]; then
+          # Count test results ([ -f "*.trx" ] never globs - use compgen)
+          if compgen -G "./TestResults/*.trx" > /dev/null; then
             echo "Test results generated successfully"
           fi
 
@@ -95,7 +99,7 @@ jobs:
 
       - name: 📊 Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.configuration }}
           path: |
@@ -105,7 +109,7 @@ jobs:
 
       - name: 📈 Upload code coverage
         if: matrix.configuration == 'Release' && matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: code-coverage
           path: ./TestResults/**/coverage.cobertura.xml
