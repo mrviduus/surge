@@ -46,19 +46,21 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
+          # No built-in cache: it needs packages.lock.json, which this repo does
+          # not use (central package management via Directory.Packages.props).
+          # The explicit cache step below keys off that file instead.
 
       - name: 📦 Cache NuGet packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.NUGET_PACKAGES }}
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json', '**/Directory.Packages.props') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: 🔄 Restore dependencies
-        run: dotnet restore --locked-mode
+        # --locked-mode requires packages.lock.json, which this repo does not use
+        run: dotnet restore
         continue-on-error: false
 
       - name: 🔨 Build solution
