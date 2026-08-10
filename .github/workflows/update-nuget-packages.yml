@@ -21,6 +21,10 @@ on:
 
 env:
   DOTNET_VERSION: '8.0.x'  # Match the project's .NET version
+  # Packages deliberately pinned - the bot must never propose upgrading them.
+  # Microsoft.CodeAnalysis.PublicApiAnalyzers: 5.x needs a newer Roslyn than the
+  # .NET 8 SDK ships -> CS9057. Unpin only when DOTNET_VERSION moves past 8.0.
+  PINNED_EXCLUDES: '--exclude Microsoft.CodeAnalysis.PublicApiAnalyzers'
 
 jobs:
   update-packages:
@@ -56,7 +60,7 @@ jobs:
           # Run dotnet-outdated and save output
           # Using --fail-on-updates to get exit code 2 when updates are available
           set +e  # Don't exit on non-zero return code
-          OUTPUT=$(dotnet-outdated --fail-on-updates 2>&1)
+          OUTPUT=$(dotnet-outdated $PINNED_EXCLUDES --fail-on-updates 2>&1)
           EXIT_CODE=$?
           set -e
 
@@ -117,7 +121,7 @@ jobs:
 
           # Try to upgrade packages, but continue even if some fail
           set +e
-          dotnet-outdated --upgrade
+          dotnet-outdated $PINNED_EXCLUDES --upgrade
           UPGRADE_EXIT_CODE=$?
           set -e
 
@@ -127,7 +131,19 @@ jobs:
 
             # Handle xUnit v3 version conflict specifically
             # When xunit.v3 is updated, related packages need to be updated together
-            if grep -q "xunit.v3.common" <<< "$(dotnet restore 2>&1)"; then
+            # Capture the status explicitly: inside $(...) a restore failure is
+            # invisible, so a genuinely broken restore would read as "no conflict"
+            set +e
+            RESTORE_LOG=$(dotnet restore 2>&1)
+            RESTORE_STATUS=$?
+            set -e
+
+            if [ $RESTORE_STATUS -ne 0 ]; then
+              echo "⚠️ Restore failed after the upgrade (exit $RESTORE_STATUS):"
+              echo "$RESTORE_LOG"
+            fi
+
+            if grep -q "xunit.v3.common" <<< "$RESTORE_LOG"; then
               echo "Detected xUnit v3 version conflict, attempting to fix..."
 
               # Get the version that xunit.v3 was updated to
@@ -153,9 +169,12 @@ jobs:
           # Check what actually got updated
           if [ -f /tmp/Directory.Packages.props.original ]; then
             if diff -q /tmp/Directory.Packages.props.original Directory.Packages.props > /dev/null; then
-              echo "❌ No packages were actually updated"
+              # Not a failure: detection can see an update the upgrade step then
+              # refuses to apply (excluded/pinned package, unrewritable entry).
+              # Nothing changed -> nothing to verify, no PR; end the step cleanly.
+              echo "ℹ️ No packages were actually updated - nothing to commit"
               echo "packages_updated=false" >> $GITHUB_OUTPUT
-              exit 1
+              exit 0
             else
               echo "✅ Packages were successfully updated"
               echo "packages_updated=true" >> $GITHUB_OUTPUT
@@ -180,7 +199,7 @@ jobs:
               git checkout HEAD -- Directory.Packages.props
 
               # Now update only non-xUnit packages
-              dotnet-outdated --upgrade --exclude "xunit*" 2>/dev/null || true
+              dotnet-outdated $PINNED_EXCLUDES --upgrade --exclude "xunit*" 2>/dev/null || true
 
               echo "partial_update=true" >> $GITHUB_OUTPUT
               dotnet restore
@@ -196,7 +215,7 @@ jobs:
 
           # Get the list of what was actually updated for the PR
           echo "Checking what was updated..."
-          dotnet-outdated > /tmp/post-update-check.txt 2>&1 || true
+          dotnet-outdated $PINNED_EXCLUDES > /tmp/post-update-check.txt 2>&1 || true
           echo "POST_UPDATE_CHECK<<EOF" >> $GITHUB_ENV
           cat /tmp/post-update-check.txt >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
