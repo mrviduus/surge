@@ -21,10 +21,16 @@ on:
 
 env:
   DOTNET_VERSION: '8.0.x'  # Match the project's .NET version
-  # Packages deliberately pinned - the bot must never propose upgrading them.
-  # Microsoft.CodeAnalysis.PublicApiAnalyzers: 5.x needs a newer Roslyn than the
-  # .NET 8 SDK ships -> CS9057. Unpin only when DOTNET_VERSION moves past 8.0.
-  PINNED_EXCLUDES: '--exclude Microsoft.CodeAnalysis.PublicApiAnalyzers'
+  # Options shared by every dotnet-outdated call - detection and upgrade MUST agree,
+  # otherwise the bot proposes bumps it then refuses (or fails) to apply.
+  #
+  # --exclude Microsoft.CodeAnalysis.PublicApiAnalyzers: 5.x needs a newer Roslyn than
+  #   the .NET 8 SDK ships -> CS9057. Unpin only when DOTNET_VERSION moves past 8.0.
+  #   Note: --exclude matches by substring (case-insensitive), NOT by glob.
+  # --version-lock Major: never bump a major automatically. Majors reshape package
+  #   graphs (xunit.v3 4.0.0 moved to xunit.v3.mtp-v2) and broke restore with NU1107;
+  #   they need a human. Minor/patch updates still flow.
+  OUTDATED_OPTS: '--exclude Microsoft.CodeAnalysis.PublicApiAnalyzers --version-lock Major'
 
 jobs:
   update-packages:
@@ -60,7 +66,7 @@ jobs:
           # Run dotnet-outdated and save output
           # Using --fail-on-updates to get exit code 2 when updates are available
           set +e  # Don't exit on non-zero return code
-          OUTPUT=$(dotnet-outdated $PINNED_EXCLUDES --fail-on-updates 2>&1)
+          OUTPUT=$(dotnet-outdated $OUTDATED_OPTS --fail-on-updates 2>&1)
           EXIT_CODE=$?
           set -e
 
@@ -116,95 +122,102 @@ jobs:
           # dotnet-outdated will automatically detect and update Directory.Packages.props
           echo "Updating packages to latest versions..."
 
-          # Capture the original state for comparison
-          cp Directory.Packages.props /tmp/Directory.Packages.props.original || true
+          PARTIAL=false
+
+          # Outputs are written exactly once, on every exit path
+          finish() {
+            echo "partial_update=$PARTIAL" >> $GITHUB_OUTPUT
+            echo "packages_updated=$1" >> $GITHUB_OUTPUT
+          }
+
+          # Restore and keep the log; inside $(...) a failure is invisible, so the
+          # status must be captured explicitly
+          try_restore() {
+            set +e
+            RESTORE_OUTPUT=$(dotnet restore 2>&1)
+            RESTORE_STATUS=$?
+            set -e
+            [ $RESTORE_STATUS -eq 0 ]
+          }
+
+          # The branch was just reset to origin/main, so ANY tracked-file change is
+          # the upgrade's doing. Whole-tree check, not just Directory.Packages.props:
+          # dotnet-outdated also rewrites .csproj entries for packages outside CPM,
+          # and those must be verified/rolled back too - never committed unchecked.
+          nothing_changed() {
+            git diff --quiet
+          }
+
+          # Undo everything the upgrade touched, byte-for-byte
+          rollback() {
+            git checkout -- .
+          }
 
           # Try to upgrade packages, but continue even if some fail
           set +e
-          dotnet-outdated $PINNED_EXCLUDES --upgrade
+          dotnet-outdated $OUTDATED_OPTS --upgrade
           UPGRADE_EXIT_CODE=$?
           set -e
 
           if [ $UPGRADE_EXIT_CODE -ne 0 ]; then
             echo "⚠️ Some packages may have failed to update, continuing with successfully updated packages..."
-            echo "partial_update=true" >> $GITHUB_OUTPUT
-
-            # Handle xUnit v3 version conflict specifically
-            # When xunit.v3 is updated, related packages need to be updated together
-            # Capture the status explicitly: inside $(...) a restore failure is
-            # invisible, so a genuinely broken restore would read as "no conflict"
-            set +e
-            RESTORE_LOG=$(dotnet restore 2>&1)
-            RESTORE_STATUS=$?
-            set -e
-
-            if [ $RESTORE_STATUS -ne 0 ]; then
-              echo "⚠️ Restore failed after the upgrade (exit $RESTORE_STATUS):"
-              echo "$RESTORE_LOG"
-            fi
-
-            if grep -q "xunit.v3.common" <<< "$RESTORE_LOG"; then
-              echo "Detected xUnit v3 version conflict, attempting to fix..."
-
-              # Get the version that xunit.v3 was updated to
-              XUNIT_VERSION=$(grep -oP 'xunit.v3"\s+Version="\K[^"]+' Directory.Packages.props || echo "")
-
-              if [ -n "$XUNIT_VERSION" ]; then
-                echo "Updating related xUnit packages to version $XUNIT_VERSION..."
-
-                # Update xunit.v3.extensibility.core to match xunit.v3 version
-                sed -i "s/xunit.v3.extensibility.core\" Version=\"[^\"]*\"/xunit.v3.extensibility.core\" Version=\"$XUNIT_VERSION\"/" Directory.Packages.props || true
-
-                # Also update xunit.runner.visualstudio if needed
-                RUNNER_VERSION=$(dotnet-outdated --transitive | grep "xunit.runner.visualstudio" | grep -oP '\->\s+\K\S+' | head -1 || echo "")
-                if [ -n "$RUNNER_VERSION" ]; then
-                  sed -i "s/xunit.runner.visualstudio\" Version=\"[^\"]*\"/xunit.runner.visualstudio\" Version=\"$RUNNER_VERSION\"/" Directory.Packages.props || true
-                fi
-              fi
-            fi
-          else
-            echo "partial_update=false" >> $GITHUB_OUTPUT
+            PARTIAL=true
           fi
 
-          # Check what actually got updated
-          if [ -f /tmp/Directory.Packages.props.original ]; then
-            if diff -q /tmp/Directory.Packages.props.original Directory.Packages.props > /dev/null; then
-              # Not a failure: detection can see an update the upgrade step then
-              # refuses to apply (excluded/pinned package, unrewritable entry).
-              # Nothing changed -> nothing to verify, no PR; end the step cleanly.
-              echo "ℹ️ No packages were actually updated - nothing to commit"
-              echo "packages_updated=false" >> $GITHUB_OUTPUT
-              exit 0
-            else
-              echo "✅ Packages were successfully updated"
-              echo "packages_updated=true" >> $GITHUB_OUTPUT
-            fi
+          # Not a failure: detection can see an update the upgrade step then
+          # refuses to apply (excluded/pinned package, unrewritable entry).
+          # Nothing changed -> nothing to verify, no PR; end the step cleanly.
+          if nothing_changed; then
+            echo "ℹ️ No packages were actually updated - nothing to commit"
+            finish false
+            exit 0
           fi
+
+          echo "✅ Packages were successfully updated"
 
           # Restore to verify the updated packages work
           echo "Verifying package restore..."
-          set +e
-          RESTORE_OUTPUT=$(dotnet restore 2>&1)
-          RESTORE_EXIT_CODE=$?
-          set -e
+          if ! try_restore; then
+            # try_restore overwrites RESTORE_OUTPUT; keep the original failure so the
+            # log still explains why the first attempt died after a retry runs
+            FIRST_RESTORE_OUTPUT="$RESTORE_OUTPUT"
+            echo "⚠️ Package restore failed after the upgrade:"
+            echo "$FIRST_RESTORE_OUTPUT"
 
-          if [ $RESTORE_EXIT_CODE -ne 0 ]; then
-            echo "⚠️ Package restore failed, attempting to fix..."
-            echo "$RESTORE_OUTPUT"
+            # NU1107 is a version conflict, in practice always the xUnit family:
+            # xunit.v3 and xunit.v3.extensibility.core are separate entries and
+            # CentralPackageTransitivePinningEnabled makes a half-moved family
+            # irreconcilable. Roll back and retry with the whole family excluded.
+            # --exclude matches by substring, so plain "xunit" covers it; a glob
+            # ("xunit*") matches nothing and silently re-applies the same bump.
+            if grep -q "NU1107" <<< "$FIRST_RESTORE_OUTPUT"; then
+              echo "Version conflict detected, retrying without xUnit packages..."
+              rollback
+              PARTIAL=true
 
-            # If restore still fails, revert problematic changes
-            if echo "$RESTORE_OUTPUT" | grep -q "NU1107"; then
-              echo "Version conflict detected, reverting xUnit updates..."
-              # Revert xUnit packages to original versions
-              git checkout HEAD -- Directory.Packages.props
+              set +e
+              dotnet-outdated $OUTDATED_OPTS --exclude xunit --upgrade
+              set -e
+            fi
 
-              # Now update only non-xUnit packages
-              dotnet-outdated $PINNED_EXCLUDES --upgrade --exclude "xunit*" 2>/dev/null || true
+            if nothing_changed; then
+              echo "ℹ️ Nothing left to update after dropping the conflicting packages"
+              finish false
+              exit 0
+            fi
 
-              echo "partial_update=true" >> $GITHUB_OUTPUT
-              dotnet restore
+            # Still broken: abandon the run rather than push a branch that cannot
+            # restore. No PR, no red X on infrastructure that behaved correctly.
+            if ! try_restore; then
+              echo "$RESTORE_OUTPUT"
+              echo "::warning::Package restore still fails after the retry - no PR will be opened"
+              rollback
+              finish false
+              exit 0
             fi
           fi
+
+          finish true
 
           # Quick build check to ensure packages are compatible
           echo "Quick build verification..."
@@ -215,19 +228,21 @@ jobs:
 
           # Get the list of what was actually updated for the PR
           echo "Checking what was updated..."
-          dotnet-outdated $PINNED_EXCLUDES > /tmp/post-update-check.txt 2>&1 || true
+          dotnet-outdated $OUTDATED_OPTS > /tmp/post-update-check.txt 2>&1 || true
           echo "POST_UPDATE_CHECK<<EOF" >> $GITHUB_ENV
           cat /tmp/post-update-check.txt >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Configure Git
-        if: steps.check-outdated.outputs.updates_available == 'true'
+        if: steps.update.outputs.packages_updated == 'true'
         run: |
           git config user.name "NuGet Update Bot"
           git config user.email "nuget-bot@github-actions"
 
       - name: Commit changes
-        if: steps.check-outdated.outputs.updates_available == 'true'
+        # packages_updated implies updates_available; gating on it keeps the commit
+        # out of every early exit of the update step (nothing applied / rolled back)
+        if: steps.update.outputs.packages_updated == 'true'
         id: commit
         run: |
           git add -A
@@ -249,7 +264,7 @@ jobs:
           fi
 
       - name: Create Pull Request
-        if: steps.check-outdated.outputs.updates_available == 'true' && steps.commit.outputs.has_changes == 'true'
+        if: steps.update.outputs.packages_updated == 'true' && steps.commit.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
@@ -307,6 +322,7 @@ jobs:
           - [ ] No new security warnings
 
           ### 💡 Notes
+          - Major-version bumps are never proposed automatically (\`--version-lock Major\`) - update them by hand
           - If xUnit packages were skipped due to version conflicts, consider updating them manually
           - Review the changes in \`Directory.Packages.props\` to ensure all versions are compatible
           - Check the Actions tab for detailed test logs and artifacts
