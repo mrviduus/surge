@@ -18,7 +18,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageVersion>
     <!-- Microsoft Testing Platform -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
   </ItemGroup>
   <ItemGroup Label="Benchmarking">
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
@@ -29,7 +29,7 @@
     <!-- DO NOT BUMP: 5.x needs Roslyn 4.12+ (.NET 9 SDK); global.json pins the .NET 8 SDK -->
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" />
     <!-- Source Link for GitHub - Enables debugging of NuGet package source code -->
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301">
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageVersion>
