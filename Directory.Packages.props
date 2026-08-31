@@ -17,7 +17,7 @@
     <!-- MTP report extensions: dotnet test on the .NET 10 SDK runs Microsoft.Testing.Platform,
          where the report-trx and coverage options replace VSTest's logger and collect options. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.9.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
   </ItemGroup>
   <ItemGroup Label="Benchmarking">
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
