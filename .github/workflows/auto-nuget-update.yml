@@ -37,6 +37,8 @@ env:
   TARGETS: '.'
   # Minor/patch only. Majors are reported, never applied.
   OUTDATED_OPTS: '--version-lock Major --exclude Microsoft.CodeAnalysis.PublicApiAnalyzers'
+  # Verification run after the bump. Empty string = build-only gate.
+  TEST_CMD: 'dotnet test LoadSurge.sln --no-build --configuration Release --verbosity normal'
 
 jobs:
   update:
@@ -92,8 +94,8 @@ jobs:
           dotnet build "$SOLUTION" --no-restore --configuration Release
 
       - name: Test
-        if: steps.update.outputs.changed == 'true'
-        run: dotnet test "$SOLUTION" --no-build --configuration Release --verbosity normal
+        if: steps.update.outputs.changed == 'true' && env.TEST_CMD != ''
+        run: eval "$TEST_CMD"
 
       - name: Report verification failure
         if: failure() && steps.update.outputs.changed == 'true'
