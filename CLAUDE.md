@@ -173,10 +173,13 @@ All tests in `tests/LoadSurge.Tests/Unit/`:
 - **Security Job:** Scans for vulnerabilities
 
 ### NuGet Publishing
-- **Release tags only** (`v*`, e.g. `v3.1.0` publishes exactly `3.1.0`) — deliberate releases, no per-commit publishing
-- Main pushes build and upload the .nupkg as a workflow artifact (version `{csproj-base}.{GITHUB_RUN_NUMBER}`) but do NOT publish
-- Requires `NUGET_API_KEY` secret in repository
-- Release flow: bump csproj `<Version>` + CHANGELOG → merge to main → `git tag vX.Y.Z && git push origin vX.Y.Z`
+- **Every push to main publishes** version `{csproj-base}.{GITHUB_RUN_NUMBER}` (e.g. `3.1.0.412`)
+- **Tags publish the exact version** — `v3.1.0` publishes `3.1.0`; use one for a real release
+- Auth is Trusted Publishing (OIDC), no `NUGET_API_KEY` secret; the nuget.org policy is bound to
+  `owner=mrviduus, repo=LoadSurge, workflow=ci-cd.yml`, so renaming the file breaks publishing
+- Dependency bumps from `auto-nuget-update.yml` push with `GITHUB_TOKEN`, which does not
+  re-trigger workflows, so they never publish
+- Release flow: bump csproj `<Version>` + CHANGELOG → push to main → `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 ## Common Scenarios
 
