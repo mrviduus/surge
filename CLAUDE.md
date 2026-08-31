@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 LoadSurge is a high-performance, dependency-free load testing framework for .NET. It implements an **open workload model** (constant arrival rate, NBomber `Inject` / k6 `constant-arrival-rate` style) and can be integrated with any testing framework or used standalone.
 
 **Key Technologies:**
-- Library multi-targets `netstandard2.0;net8.0`: netstandard2.0 for reach (.NET Framework 4.7.2+, .NET 6+), net8.0 for Native-AOT/trimming support (`IsAotCompatible`, `IsTrimmable`). Built with the .NET 8 SDK (`global.json` pins `8.0.100`, `rollForward: latestFeature`).
+- Library multi-targets `netstandard2.0;net8.0`: netstandard2.0 for reach (.NET Framework 4.7.2+, .NET 6+), net8.0 for Native-AOT/trimming support (`IsAotCompatible`, `IsTrimmable`). Built with the .NET 10 SDK (`global.json` pins `10.0.100`, `rollForward: latestFeature`); the target frameworks are unchanged.
 - **Zero external dependencies** (Akka.NET was removed in v3.0.0)
 - xUnit v3 (Testing; test project targets `net8.0`)
 - NuGet package published as `LoadSurge` (current version 3.1.0)
@@ -25,19 +25,21 @@ dotnet build --configuration Release   # TreatWarningsAsErrors here
 ```
 
 ### Testing
+`global.json` opts `dotnet test` into the Microsoft.Testing.Platform runner, so the options
+below are MTP's, not VSTest's (`--filter-class` etc. instead of `--filter`).
 ```bash
 # Run all tests
 dotnet test
 
 # Run a specific test class / method
-dotnet test --filter "FullyQualifiedName~LoadEngineTests"
-dotnet test --filter "FullyQualifiedName~LoadEngineTests.MaxIterations_Executes_Exactly_N_Times"
+dotnet test --filter-class "*LoadEngineTests"
+dotnet test --filter-method "*MaxIterations_Executes_Exactly_N_Times"
 
 # Run tests excluding CI-flaky tests
-dotnet test --filter "Category!=CI-Flaky"
+dotnet test --filter-not-trait "Category=CI-Flaky"
 
 # Code coverage
-dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults
+dotnet test --coverage --coverage-output-format cobertura --results-directory TestResults
 ```
 
 ### Package
@@ -217,7 +219,7 @@ LoadSurge/
 The public API surface is declared in `src/LoadSurge/PublicAPI.Shipped.txt` (released) and `PublicAPI.Unshipped.txt` (pending). Adding/changing/removing a public member without updating these files fails the build (RS0016/RS0017) — this is the guard against accidental breaking changes.
 - New public API → add the entry to `PublicAPI.Unshipped.txt` (or run `dotnet format analyzers src/LoadSurge/LoadSurge.csproj --diagnostics RS0016`)
 - On release → move Unshipped entries into Shipped
-- Note: analyzer pinned to 3.3.4 — newer versions need a newer Roslyn than the .NET 8 SDK ships (CS9057)
+- Analyzer is on 5.x, which needs the Roslyn shipped with the .NET 9+ SDK
 
 ## Backward Compatibility
 

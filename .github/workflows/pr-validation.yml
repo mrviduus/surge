@@ -46,6 +46,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
           # No built-in cache: it needs packages.lock.json, which this repo does
           # not use (central package management via Directory.Packages.props).
           # The explicit cache step below keys off that file instead.
@@ -79,14 +80,15 @@ jobs:
           # before TEST_EXIT_CODE is captured, leaving the output empty
           set +e
           dotnet test \
+            --solution LoadSurge.sln \
             --no-build \
             --configuration ${{ matrix.configuration }} \
-            --verbosity normal \
-            --logger "trx;LogFileName=test-results-${{ matrix.os }}-${{ matrix.configuration }}.trx" \
-            --logger "console;verbosity=detailed" \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover,cobertura
+            --output Detailed \
+            --report-trx \
+            --report-trx-filename test-results-${{ matrix.os }}-${{ matrix.configuration }}.trx \
+            --coverage \
+            --coverage-output-format cobertura \
+            --results-directory ./TestResults
 
           TEST_EXIT_CODE=$?
           set -e
@@ -105,8 +107,8 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.configuration }}
           path: |
-            ./TestResults/**/*.trx
-            ./TestResults/**/*.xml
+            ./TestResults/*.trx
+            ./TestResults/*.xml
           retention-days: 30
 
       - name: 📈 Upload code coverage
@@ -114,7 +116,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: code-coverage
-          path: ./TestResults/**/coverage.cobertura.xml
+          path: ./TestResults/*.cobertura.xml
           retention-days: 30
 
       - name: 💬 Comment PR with test results
@@ -182,6 +184,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
 
       - name: 🔄 Restore dependencies
         run: dotnet restore
@@ -198,10 +201,11 @@ jobs:
           # Run any performance-specific tests (if they exist)
           # Look for tests with [Trait("Category", "Performance")] or similar
           dotnet test \
+            --solution LoadSurge.sln \
             --configuration Release \
             --no-build \
-            --filter "Category=Performance|Category=Benchmark" \
-            --verbosity normal \
+            --filter-trait "Category=Performance" \
+            --filter-trait "Category=Benchmark" \
             || echo "No performance tests found or tests completed with warnings"
 
           echo "performance_check=completed" >> $GITHUB_OUTPUT
@@ -219,6 +223,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
 
       - name: 🔒 Run security audit
         continue-on-error: true  # Security warnings shouldn't block PR

@@ -5,6 +5,19 @@ All notable changes to the LoadSurge project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Build moves to the .NET 10 SDK (`global.json` pins `10.0.100`). Target frameworks are
+  unchanged (`netstandard2.0;net8.0`), so the shipped package is not affected.
+- `dotnet test` opts into the Microsoft.Testing.Platform runner: the .NET 10 SDK dropped the
+  VSTest target for MTP test projects. CI uses `--solution`, `--report-trx` and `--coverage`
+  in place of `--logger trx` and `--collect "XPlat Code Coverage"`.
+- `Microsoft.CodeAnalysis.PublicApiAnalyzers` 3.3.4 -> 5.6.0, unblocked by the SDK move.
+- xunit.v3 3.2.2 -> 4.0.0.
+- Dropped `xunit.runner.visualstudio`, which only serves VSTest; added
+  `Microsoft.Testing.Extensions.TrxReport` and `.CodeCoverage` for the MTP report options.
+
 ## [3.1.0] - 2026-07-11
 
 ### Added

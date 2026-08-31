@@ -36,9 +36,9 @@ env:
   # What dotnet-outdated is pointed at ('.' = discover from repo root, CPM-aware)
   TARGETS: '.'
   # Minor/patch only. Majors are reported, never applied.
-  OUTDATED_OPTS: '--version-lock Major --exclude Microsoft.CodeAnalysis.PublicApiAnalyzers'
+  OUTDATED_OPTS: '--version-lock Major'
   # Verification run after the bump. Empty string = build-only gate.
-  TEST_CMD: 'dotnet test LoadSurge.sln --no-build --configuration Release --verbosity normal'
+  TEST_CMD: 'dotnet test --solution LoadSurge.sln --configuration Release --no-build'
 
 jobs:
   update:
